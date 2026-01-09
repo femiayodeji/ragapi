@@ -81,7 +81,3 @@ voices/
 *.tar.gz
 *.zip
 sqlite-autoconf*/
-
-# Project specific - User documents (keep example files only)
-documents/*.pdf
-!documents/example.pdf
