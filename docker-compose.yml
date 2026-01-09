@@ -16,41 +16,21 @@ services:
       retries: 3
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: rag-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
   rag-app:
     build: .
     container_name: rag-app
     ports:
       - "8000:8000"
     volumes:
-      - ./documents:/app/documents:ro
       - ./chroma_db:/app/chroma_db
       - ./processed_files.txt:/app/processed_files.txt
     env_file:
       - .env
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
-      ollama:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -68,7 +48,5 @@ services:
           memory: 4G
 
 volumes:
-  ollama_data:
-    driver: local
   redis_data:
     driver: local

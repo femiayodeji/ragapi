@@ -12,7 +12,6 @@ ENV/
 
 # Data directories (will be mounted as volumes in production)
 chroma_db/
-documents/*.pdf
 processed_files.txt
 
 # IDE / Editors
