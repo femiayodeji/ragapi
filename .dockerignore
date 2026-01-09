@@ -1,0 +1,63 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Data directories (will be mounted as volumes in production)
+chroma_db/
+documents/*.pdf
+processed_files.txt
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.spyderproject
+
+# OS specific
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+README.md
+DOCKER_SETUP.md
+*.md
+!requirements.txt
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Logs
+*.log
+
+# Build artifacts
+*.tar.gz
+*.zip
+sqlite-autoconf*/
+
+# Docker files (avoid recursion)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment files (use docker env vars instead)
+.env
+.env.example
