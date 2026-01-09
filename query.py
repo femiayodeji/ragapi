@@ -2,6 +2,7 @@ from config import TOP_K, SESSION_MAX_HISTORY
 from llm_client import get_llm_client
 from query_validator import validator
 from typing import List
+from functools import lru_cache
 
 
 SYSTEM_PROMPT = """You are a helpful government service assistant specializing in passport and immigration services.
@@ -33,7 +34,8 @@ IMPORTANT GUIDELINES:
 4. TONE: Professional, clear, and helpful"""
 
 
-def get_system_prompt(doc_titles: List[str]) -> str:
+@lru_cache(maxsize=8)
+def get_system_prompt(doc_titles: tuple) -> str:
     titles_str = ", ".join(doc_titles) if doc_titles else "passport and government services"
     service_scope = titles_str.lower().replace(" - ", " for ")
     return SYSTEM_PROMPT.format(doc_titles=titles_str, service_scope=service_scope)
@@ -120,7 +122,7 @@ def query_documents(qa_chain, question: str, session_context: str = None) -> str
         )
     
     context = "\n\n".join([doc.page_content for doc in docs])
-    system_prompt = get_system_prompt(doc_titles)
+    system_prompt = get_system_prompt(tuple(doc_titles))
     
     user_prompt = ""
     if session_context:
@@ -163,7 +165,7 @@ def query_documents_stream(qa_chain, question: str, session_context: str = None)
         return
     
     context = "\n\n".join([doc.page_content for doc in docs])
-    system_prompt = get_system_prompt(doc_titles)
+    system_prompt = get_system_prompt(tuple(doc_titles))
     
     user_prompt = ""
     if session_context:
