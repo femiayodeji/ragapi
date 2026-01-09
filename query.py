@@ -1,4 +1,4 @@
-from config import TOP_K
+from config import TOP_K, SESSION_MAX_HISTORY
 from llm_client import get_llm_client
 
 
@@ -16,6 +16,48 @@ def create_rag_chain(vectorstore):
         "vectorstore": vectorstore,
         "llm": get_llm_client()
     }
+
+
+def get_session_context(session_service, session_id: str):
+    if not session_service:
+        return None
+    
+    try:
+        if session_service.session_exists(session_id):
+            return session_service.format_history(session_id, SESSION_MAX_HISTORY)
+    except Exception:
+        return None
+
+
+def save_session_message(session_service, session_id: str, role: str, content: str):
+    if session_service:
+        try:
+            session_service.add_message(session_id, role, content)
+        except Exception:
+            pass
+
+
+def query_with_session(rag_chain, session_service, question: str, session_id: str):
+    session_context = get_session_context(session_service, session_id)
+    save_session_message(session_service, session_id, "user", question)
+    
+    answer = query_documents(rag_chain, question, session_context)
+    
+    save_session_message(session_service, session_id, "assistant", answer)
+    
+    return {"question": question, "answer": answer, "session_id": session_id}
+
+
+def query_with_session_stream(rag_chain, session_service, question: str, session_id: str):
+    session_context = get_session_context(session_service, session_id)
+    save_session_message(session_service, session_id, "user", question)
+    
+    full_answer = ""
+    for chunk in query_documents_stream(rag_chain, question, session_context):
+        full_answer += chunk
+        yield chunk
+    
+    save_session_message(session_service, session_id, "assistant", full_answer)
 
 
 def query_documents(qa_chain, question: str, session_context: str = None) -> str:

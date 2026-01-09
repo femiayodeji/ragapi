@@ -1,22 +1,3 @@
-"""
-Document Processing and Vector Store Management
-
-This module handles:
-- PDF document loading and chunking
-- ChromaDB vector store creation and management
-- Tracking processed documents to avoid reprocessing
-- Embedding configuration management
-
-Key Functions:
-- process_pdfs(): Main entry point for processing new PDFs
-- load_vectorstore(): Load existing vector store
-- create_vectorstore(): Create new vector store from documents
-- clear_all(): Reset all data (use when changing embedding models)
-
-Note: Changing embedding models requires clearing the vector store
-since embeddings from different models are incompatible.
-"""
-
 import os
 import hashlib
 import shutil
@@ -30,7 +11,6 @@ from embedding_client import get_embeddings
 
 
 def file_hash(filepath: str) -> str:
-    """Generate MD5 hash of file to detect changes."""
     with open(filepath, 'rb') as file_handle:
         return hashlib.md5(file_handle.read()).hexdigest()
 
@@ -74,7 +54,6 @@ def create_vectorstore(documents, embeddings=None):
 
 
 def load_vectorstore(embeddings=None):
-    """Load existing ChromaDB vector store."""
     if not os.path.exists(CHROMA_DIR):
         return None
     return Chroma(
@@ -84,20 +63,10 @@ def load_vectorstore(embeddings=None):
 
 
 def chunk_count(vectorstore) -> int:
-    """Get number of document chunks in vector store."""
     return vectorstore._collection.count() if vectorstore else 0
 
 
 def clear_all():
-    """
-    Clear all data: vector store, processed files, and embedding config.
-    
-    WARNING: This deletes all processed documents and requires reprocessing.
-    Use when:
-    - Changing embedding models (different embeddings are incompatible)
-    - Starting fresh with new documents
-    - Troubleshooting vector store issues
-    """
     for path in [CHROMA_DIR, PROCESSED_FILES, '.embedding_config']:
         if os.path.isdir(path):
             shutil.rmtree(path)
@@ -106,19 +75,11 @@ def clear_all():
 
 
 def save_embedding_config(provider: str, model: str):
-    """
-    Save embedding configuration to detect model changes.
-    
-    This tracks which embedding provider/model was used to create the vector store.
-    If the config changes, we know to rebuild the vector store since embeddings
-    from different models cannot be mixed.
-    """
     with open('.embedding_config', 'w') as f:
         f.write(f"{provider}:{model}")
 
 
 def load_embedding_config() -> Tuple[str, str]:
-    """Load saved embedding configuration, returns (provider, model) or (None, None)."""
     if os.path.exists('.embedding_config'):
         with open('.embedding_config', 'r') as f:
             content = f.read().strip()
@@ -155,3 +116,49 @@ def process_pdfs() -> List[Document]:
     for filepath, hash_value, filename in unprocessed:
         chunks.extend(process_pdf(filepath, filename, hash_value))
     return chunks
+
+
+def load_documents():
+    from config import EMBEDDING_MODEL, EMBEDDING_PROVIDER, LLM_PROVIDER
+    import query
+    
+    provider = EMBEDDING_PROVIDER or LLM_PROVIDER
+    embeddings = get_embeddings()
+    
+    if embedding_changed(provider, EMBEDDING_MODEL):
+        old_provider, old_model = load_embedding_config()
+        print(f"Embedding changed: {old_provider}/{old_model} → {provider}/{EMBEDDING_MODEL}")
+        print("Clearing old database")
+        clear_all()
+    
+    pdf_files = get_pdf_files()
+    if not pdf_files:
+        print(f"No PDFs in '{PDF_DIR}'")
+        return None, None
+    
+    print(f"Found {len(pdf_files)} PDF(s)")
+    
+    vectorstore = load_vectorstore(embeddings)
+    chunks = process_pdfs()
+    
+    if chunks:
+        if vectorstore:
+            print(f"Adding {len(chunks)} new chunks")
+            vectorstore.add_documents(chunks)
+        else:
+            print(f"Creating vectorstore with {len(chunks)} chunks")
+            vectorstore = create_vectorstore(chunks, embeddings)
+    elif vectorstore:
+        count = chunk_count(vectorstore)
+        print(f"Loaded {count} chunks")
+    
+    rag_chain = query.create_rag_chain(vectorstore) if vectorstore else None
+    if rag_chain:
+        save_embedding_config(provider, EMBEDDING_MODEL)
+    
+    return vectorstore, rag_chain
+
+
+def reload_documents():
+    vectorstore, rag_chain = load_documents()
+    return vectorstore, rag_chain, chunk_count(vectorstore)

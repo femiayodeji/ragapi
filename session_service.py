@@ -5,25 +5,11 @@ import redis
 from config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD, SESSION_EXPIRE, SESSION_KEY_PREFIX
 
 
-class Message:
-    def __init__(self, role: str, content: str, timestamp: str = None):
-        self.role = role
-        self.content = content
-        self.timestamp = timestamp or datetime.utcnow().isoformat()
-    
-    def to_dict(self):
-        return {"role": self.role, "content": self.content, "timestamp": self.timestamp}
-    
-    @classmethod
-    def from_dict(cls, data):
-        return cls(data["role"], data["content"], data.get("timestamp"))
-
-
 class SessionService:
     def add_message(self, session_id: str, role: str, content: str):
         raise NotImplementedError
     
-    def get_history(self, session_id: str, max_messages: int = None) -> List[Message]:
+    def get_history(self, session_id: str, max_messages: int = None) -> List[dict]:
         raise NotImplementedError
     
     def clear_session(self, session_id: str):
@@ -37,7 +23,7 @@ class SessionService:
         if not history:
             return ""
         return "\n".join([
-            f"{'Human' if msg.role == 'user' else 'Assistant'}: {msg.content}"
+            f"{'Human' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
             for msg in history
         ])
 
@@ -60,15 +46,19 @@ class RedisSessionService(SessionService):
     
     def add_message(self, session_id: str, role: str, content: str):
         key = f"{SESSION_KEY_PREFIX}{session_id}"
-        message = Message(role, content)
-        self.client.rpush(key, json.dumps(message.to_dict()))
+        message = {
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        self.client.rpush(key, json.dumps(message))
         if SESSION_EXPIRE > 0:
             self.client.expire(key, SESSION_EXPIRE)
     
-    def get_history(self, session_id: str, max_messages: int = None) -> List[Message]:
+    def get_history(self, session_id: str, max_messages: int = None) -> List[dict]:
         key = f"{SESSION_KEY_PREFIX}{session_id}"
         messages_data = self.client.lrange(key, -max_messages if max_messages else 0, -1)
-        return [Message.from_dict(json.loads(msg_json)) for msg_json in messages_data]
+        return [json.loads(msg_json) for msg_json in messages_data]
     
     def clear_session(self, session_id: str):
         self.client.delete(f"{SESSION_KEY_PREFIX}{session_id}")
@@ -84,9 +74,13 @@ class InMemorySessionService(SessionService):
     def add_message(self, session_id: str, role: str, content: str):
         if session_id not in self.sessions:
             self.sessions[session_id] = []
-        self.sessions[session_id].append(Message(role, content))
+        self.sessions[session_id].append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow().isoformat()
+        })
     
-    def get_history(self, session_id: str, max_messages: int = None) -> List[Message]:
+    def get_history(self, session_id: str, max_messages: int = None) -> List[dict]:
         if session_id not in self.sessions:
             return []
         messages = self.sessions[session_id]
@@ -107,3 +101,4 @@ def get_session_service(backend: str = "redis"):
         except Exception:
             return InMemorySessionService()
     return InMemorySessionService()
+

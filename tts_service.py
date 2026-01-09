@@ -1,17 +1,35 @@
 import subprocess
 import os
 import tempfile
+from pathlib import Path
 from config import VOICE_DIR, VOICE_EXTENSION, AUDIO_EXTENSION
 
 
 class TTSService:
     def __init__(self, voice_model="en_US-lessac-medium"):
         self.model_path = f"{VOICE_DIR}/{voice_model}{VOICE_EXTENSION}"
+        self.piper_dir = Path(__file__).parent / "piper"
+        self.env = self._setup_environment()
+        
         try:
-            subprocess.run(["piper", "--version"], capture_output=True, check=True)
+            subprocess.run(["piper", "--version"], capture_output=True, check=True, env=self.env)
             print(f"Piper TTS with {voice_model}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("WARNING: Piper not found")
+    
+    def _setup_environment(self):
+        env = os.environ.copy()
+        if self.piper_dir.exists():
+            ld_library_path = str(self.piper_dir)
+            if "LD_LIBRARY_PATH" in env:
+                env["LD_LIBRARY_PATH"] = f"{ld_library_path}:{env['LD_LIBRARY_PATH']}"
+            else:
+                env["LD_LIBRARY_PATH"] = ld_library_path
+            
+            espeak_data = self.piper_dir / "espeak-ng-data"
+            if espeak_data.exists():
+                env["ESPEAK_DATA_PATH"] = str(espeak_data)
+        return env
     
     def synthesize(self, text: str) -> dict:
         if not os.path.exists(self.model_path):
@@ -25,7 +43,8 @@ class TTSService:
                 ["piper", "--model", self.model_path, "--output_file", output_file],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                env=self.env
             )
             stdout, stderr = process.communicate(input=text.encode('utf-8'))
             

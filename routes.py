@@ -3,29 +3,61 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 import io
 import json
+import uuid
 import logging
-from state import AppState
+import tempfile
 from models import Query
-from utils import (
-    ensure_documents_loaded, ensure_service_available,
-    validate_audio_data, transcribe_audio, get_or_create_session_id,
-    process_query_with_session, process_query_with_session_stream
-)
-import command
+import query as query_module
 
 logger = logging.getLogger(__name__)
 
+MAX_AUDIO_SIZE_MB = 10
+MAX_AUDIO_SIZE_BYTES = MAX_AUDIO_SIZE_MB * 1024 * 1024
 
-async def query_endpoint(query: Query):
-    ensure_documents_loaded(AppState)
-    session_id = get_or_create_session_id(query.session_id)
+
+def validate_audio(audio_bytes: bytes):
+    if not audio_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty audio file")
+    if len(audio_bytes) > MAX_AUDIO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Audio file too large (max {MAX_AUDIO_SIZE_MB}MB)"
+        )
+
+
+def transcribe_audio(stt_service, audio_bytes: bytes) -> str:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+        f.write(audio_bytes)
+        temp_path = f.name
+    
+    try:
+        result = stt_service.model.transcribe(temp_path)
+        text = result["text"].strip()
+        if not text:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No speech detected")
+        return text
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Transcription failed: {e}")
+
+
+async def query_endpoint(query: Query, app):
+    if app.startup_error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=app.startup_error)
+    if not app.rag_chain:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No documents loaded")
+    
+    session_id = query.session_id or str(uuid.uuid4())
     
     async def event_generator():
         try:
             yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
             yield f"data: {json.dumps({'type': 'question', 'question': query.question})}\n\n"
             
-            for chunk in process_query_with_session_stream(AppState.rag_chain, AppState.session_service, query.question, session_id):
+            for chunk in query_module.query_with_session_stream(
+                app.rag_chain, app.session_service, query.question, session_id
+            ):
                 yield f"data: {json.dumps({'type': 'token', 'token': chunk})}\n\n"
             
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -36,28 +68,29 @@ async def query_endpoint(query: Query):
     return StreamingResponse(
         event_generator(), 
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no"
-        }
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
 
 
-async def voice_query(audio: UploadFile = File(...), session_id: Optional[str] = None):
-    ensure_documents_loaded(AppState)
-    ensure_service_available(AppState.stt_service, "Speech-to-text")
+async def voice_query(audio: UploadFile, session_id: Optional[str], app):
+    if not app.rag_chain:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No documents loaded")
+    if not app.stt_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="STT unavailable")
     
     audio_bytes = await audio.read()
-    validate_audio_data(audio_bytes)
-    question = transcribe_audio(AppState.stt_service, audio_bytes)
+    validate_audio(audio_bytes)
+    question = transcribe_audio(app.stt_service, audio_bytes)
     
-    session_id = get_or_create_session_id(session_id)
+    session_id = session_id or str(uuid.uuid4())
     
     async def event_generator():
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
         yield f"data: {json.dumps({'type': 'question', 'question': question})}\n\n"
         
-        for chunk in process_query_with_session_stream(AppState.rag_chain, AppState.session_service, question, session_id):
+        for chunk in query_module.query_with_session_stream(
+            app.rag_chain, app.session_service, question, session_id
+        ):
             yield f"data: {json.dumps({'type': 'token', 'token': chunk})}\n\n"
         
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -65,20 +98,21 @@ async def voice_query(audio: UploadFile = File(...), session_id: Optional[str] =
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-async def voice_full(audio: UploadFile = File(...), session_id: Optional[str] = None):
-    ensure_documents_loaded(AppState)
-    ensure_service_available(AppState.stt_service, "Speech-to-text")
-    ensure_service_available(AppState.tts_service, "Text-to-speech")
+async def voice_full(audio: UploadFile, session_id: Optional[str], app):
+    if not app.rag_chain:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No documents loaded")
+    if not app.stt_service or not app.tts_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="STT or TTS unavailable")
     
     audio_bytes = await audio.read()
-    validate_audio_data(audio_bytes)
-    question = transcribe_audio(AppState.stt_service, audio_bytes)
+    validate_audio(audio_bytes)
+    question = transcribe_audio(app.stt_service, audio_bytes)
     
-    session_id = get_or_create_session_id(session_id)
-    result = process_query_with_session(AppState.rag_chain, AppState.session_service, question, session_id)
+    session_id = session_id or str(uuid.uuid4())
+    result = query_module.query_with_session(app.rag_chain, app.session_service, question, session_id)
     answer = result["answer"]
     
-    tts_result = AppState.tts_service.synthesize(answer)
+    tts_result = app.tts_service.synthesize(answer)
     if not tts_result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,66 +126,62 @@ async def voice_full(audio: UploadFile = File(...), session_id: Optional[str] = 
     )
 
 
-async def text_to_speech(query: Query):
-    ensure_service_available(AppState.tts_service, "Text-to-speech")
+async def text_to_speech(query: Query, app):
+    if not app.tts_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="TTS unavailable")
     
-    result = AppState.tts_service.synthesize(query.question)
+    result = app.tts_service.synthesize(query.question)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Text-to-speech failed: {result.get('error', 'Unknown error')}"
+            detail=f"TTS failed: {result.get('error')}"
         )
     
     return StreamingResponse(io.BytesIO(result["audio_bytes"]), media_type="audio/wav")
 
 
-async def session_history(session_id: str):
-    """Get conversation history for a session."""
-    ensure_service_available(AppState.session_service, "Session service")
+async def session_history(session_id: str, app):
+    if not app.session_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Session service unavailable")
     
-    if not AppState.session_service.session_exists(session_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
+    if not app.session_service.session_exists(session_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     
-    messages = AppState.session_service.get_history(session_id)
+    messages = app.session_service.get_history(session_id)
     return {
         "session_id": session_id,
         "message_count": len(messages),
-        "messages": [msg.to_dict() for msg in messages]
+        "messages": messages
     }
 
 
-async def clear_session(session_id: str):
-    """Clear conversation history for a session."""
-    ensure_service_available(AppState.session_service, "Session service")
+async def clear_session(session_id: str, app):
+    if not app.session_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Session service unavailable")
     
-    if not AppState.session_service.session_exists(session_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
+    if not app.session_service.session_exists(session_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     
-    AppState.session_service.clear_session(session_id)
-    return {"message": "Session cleared successfully", "session_id": session_id}
+    app.session_service.clear_session(session_id)
+    return {"message": "Session cleared", "session_id": session_id}
 
 
-async def reload_documents():
-    """Reload documents from the documents folder."""
+async def reload_documents(app):
+    import document_processor
+    
     logger.info("Reloading documents...")
-    AppState.vectorstore, AppState.rag_chain, count = command.reload_documents(AppState.vectorstore)
-    AppState.startup_error = None
-    logger.info(f"Documents reloaded successfully ({count} chunks)")
+    app.vectorstore, app.rag_chain, count = document_processor.reload_documents()
+    app.startup_error = None
+    logger.info(f"Documents reloaded ({count} chunks)")
     return {"message": "Documents reloaded", "chunk_count": count}
 
 
-async def clear_database():
-    """Clear all documents and vector store."""
+async def clear_database(app):
     import document_processor
+    
     logger.info("Clearing database...")
     document_processor.clear_all()
-    AppState.vectorstore = None
-    AppState.rag_chain = None
-    logger.info("Database cleared successfully")
+    app.vectorstore = None
+    app.rag_chain = None
+    logger.info("Database cleared")
     return {"message": "Database cleared. Add documents and restart or call /reload"}

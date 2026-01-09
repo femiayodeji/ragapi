@@ -29,6 +29,8 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+**Note:** On some systems, use `python3` instead of `python`.
+
 ### 2. Configure Environment
 
 Copy the example configuration and edit with your API keys:
@@ -288,11 +290,46 @@ curl http://localhost:8000/session/{session_id}/history
 
 | Issue | Solution |
 |-------|----------|
+| `python` command not found | Use `python3` instead of `python` on Linux/Mac |
 | Documents not loading | Check PDFs are in `documents/` folder and valid |
 | API key errors | Verify keys in `.env` file, no extra spaces |
 | Redis connection issues | App works without Redis (uses memory sessions)<br>Install: `sudo apt install redis-server` or Docker |
 | Voice features not working | Piper TTS is optional - see Voice Features Setup<br>Whisper auto-downloads on first use |
 | Out of memory | Reduce `CHUNK_SIZE`, `TOP_K` in `.env`<br>Use lighter models (gemini-1.5-flash) |
+| ChromaDB telemetry errors | Harmless warnings, can be ignored - telemetry is disabled |
+
+## Deployment
+
+### Render
+
+1. Push your code to GitHub
+2. Create new Web Service on Render
+3. Configure:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `python main.py`
+4. Add environment variables from your `.env` file
+5. Deploy
+
+### Docker
+
+```bash
+# Start all services (Redis, Ollama, RAG app)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f rag-app
+
+# Stop services
+docker-compose down
+```
+
+### Other Platforms
+
+The application is compatible with any platform supporting Python 3.9+:
+- Set build command: `pip install -r requirements.txt`
+- Set start command: `python main.py`
+- Configure environment variables
+- Ensure port 8000 is exposed
 
 ## Development
 
