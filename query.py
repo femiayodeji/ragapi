@@ -1,5 +1,6 @@
 from config import TOP_K, SESSION_MAX_HISTORY
 from llm_client import get_llm_client
+from query_validator import validator
 
 
 SYSTEM_PROMPT = """Government service assistant. Help citizens clearly and efficiently.
@@ -64,10 +65,19 @@ def query_documents(qa_chain, question: str, session_context: str = None) -> str
     if not qa_chain:
         raise ValueError("QA chain not initialized")
     
+    clarity_error = validator.validate_clarity(question)
+    if clarity_error:
+        return clarity_error
+    
     vectorstore = qa_chain["vectorstore"]
     llm = qa_chain["llm"]
     
-    docs = vectorstore.as_retriever(search_kwargs={"k": TOP_K}).invoke(question)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
+    docs = retriever.invoke(question)
+    
+    if not docs:
+        return validator._out_of_scope_message()
+    
     context = "\n\n".join([doc.page_content for doc in docs])
     
     user_prompt = ""
@@ -83,10 +93,21 @@ def query_documents_stream(qa_chain, question: str, session_context: str = None)
     if not qa_chain:
         raise ValueError("QA chain not initialized")
     
+    clarity_error = validator.validate_clarity(question)
+    if clarity_error:
+        yield clarity_error
+        return
+    
     vectorstore = qa_chain["vectorstore"]
     llm = qa_chain["llm"]
     
-    docs = vectorstore.as_retriever(search_kwargs={"k": TOP_K}).invoke(question)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
+    docs = retriever.invoke(question)
+    
+    if not docs:
+        yield validator._out_of_scope_message()
+        return
+    
     context = "\n\n".join([doc.page_content for doc in docs])
     
     user_prompt = ""
@@ -96,4 +117,5 @@ def query_documents_stream(qa_chain, question: str, session_context: str = None)
     user_prompt += f"Context: {context}\n\nQuestion: {question}\n\nAnswer:"
     
     for chunk in llm.generate_stream(user_prompt, SYSTEM_PROMPT):
+        yield chunk
         yield chunk
