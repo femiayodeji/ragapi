@@ -1,8 +1,11 @@
+from functools import lru_cache
+
+from langchain.schema import Document
+
 from config import TOP_K, SESSION_MAX_HISTORY
 from llm_client import get_llm_client
 from query_validator import validator
-from typing import List
-from functools import lru_cache
+import document_processor
 
 
 SYSTEM_PROMPT = """You are a helpful government service assistant specializing in passport and immigration services.
@@ -39,6 +42,18 @@ def get_system_prompt(doc_titles: tuple) -> str:
     titles_str = ", ".join(doc_titles) if doc_titles else "passport and government services"
     service_scope = titles_str.lower().replace(" - ", " for ")
     return SYSTEM_PROMPT.format(doc_titles=titles_str, service_scope=service_scope)
+
+
+@lru_cache(maxsize=100)
+def cached_vector_search(question: str, top_k: int) -> tuple:
+    if not document_processor._vectorstore:
+        return ()
+    retriever = document_processor._vectorstore.as_retriever(search_kwargs={"k": top_k})
+    documents = retriever.invoke(question)
+    return tuple((doc.page_content, dict(doc.metadata)) for doc in documents)
+    retriever = document_processor._vectorstore.as_retriever(search_kwargs={"k": top_k})
+    documents = retriever.invoke(question)
+    return tuple((doc.page_content, dict(doc.metadata)) for doc in documents)
 
 
 def create_rag_chain(vectorstore):
@@ -100,29 +115,31 @@ def query_documents(qa_chain, question: str, session_context: str = None) -> str
     if basic_error:
         return basic_error
     
-    vectorstore = qa_chain["vectorstore"]
     llm = qa_chain["llm"]
+    normalized_question = question.lower().strip()
+    search_results = cached_vector_search(normalized_question, TOP_K)
     
-    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
-    docs = retriever.invoke(question)
-    
-    doc_titles = []
-    if docs:
-        for doc in docs:
-            source = doc.metadata.get('source', '')
-            if source:
-                filename = source.split('/')[-1].replace('.pdf', '').replace('_', ' ').title()
-                if filename not in doc_titles:
-                    doc_titles.append(filename)
-    
-    if not docs:
+    if not search_results:
         return (
             "I couldn't find any relevant information in my knowledge base. "
             "Please ask questions related to passport and government services."
         )
     
-    context = "\n\n".join([doc.page_content for doc in docs])
-    system_prompt = get_system_prompt(tuple(doc_titles))
+    documents = [Document(page_content=content, metadata=meta) 
+                 for content, meta in search_results]
+    
+    document_titles = []
+    for document in documents:
+        source_path = document.metadata.get('source', '')
+        if source_path:
+            title = source_path.split('/')[-1].replace('.pdf', '').replace('_', ' ').title()
+            if title not in document_titles:
+                document_titles.append(title)
+    
+    context = "\n\n".join([document.page_content for document in documents])
+    system_prompt = get_system_prompt(tuple(document_titles))
+    
+    user_prompt = ""
     
     user_prompt = ""
     if session_context:
@@ -142,30 +159,30 @@ def query_documents_stream(qa_chain, question: str, session_context: str = None)
         yield basic_error
         return
     
-    vectorstore = qa_chain["vectorstore"]
     llm = qa_chain["llm"]
+    normalized_question = question.lower().strip()
+    search_results = cached_vector_search(normalized_question, TOP_K)
     
-    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
-    docs = retriever.invoke(question)
-    
-    doc_titles = []
-    if docs:
-        for doc in docs:
-            source = doc.metadata.get('source', '')
-            if source:
-                filename = source.split('/')[-1].replace('.pdf', '').replace('_', ' ').title()
-                if filename not in doc_titles:
-                    doc_titles.append(filename)
-    
-    if not docs:
+    if not search_results:
         yield (
             "I couldn't find any relevant information in my knowledge base. "
             "Please ask questions related to passport and government services."
         )
         return
     
-    context = "\n\n".join([doc.page_content for doc in docs])
-    system_prompt = get_system_prompt(tuple(doc_titles))
+    documents = [Document(page_content=content, metadata=meta) 
+                 for content, meta in search_results]
+    
+    document_titles = []
+    for document in documents:
+        source_path = document.metadata.get('source', '')
+        if source_path:
+            title = source_path.split('/')[-1].replace('.pdf', '').replace('_', ' ').title()
+            if title not in document_titles:
+                document_titles.append(title)
+    
+    context = "\n\n".join([document.page_content for document in documents])
+    system_prompt = get_system_prompt(tuple(document_titles))
     
     user_prompt = ""
     if session_context:

@@ -9,6 +9,9 @@ from langchain.schema import Document
 from config import CHROMA_DIR, PROCESSED_FILES, PDF_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 from embedding_client import get_embeddings
 
+# Track vectorstore for caching
+_vectorstore = None
+
 
 def file_hash(filepath: str) -> str:
     with open(filepath, 'rb') as file_handle:
@@ -152,6 +155,9 @@ def load_documents():
         count = chunk_count(vectorstore)
         print(f"Loaded {count} chunks")
     
+    global _vectorstore
+    _vectorstore = vectorstore
+    
     rag_chain = query.create_rag_chain(vectorstore) if vectorstore else None
     if rag_chain:
         save_embedding_config(provider, EMBEDDING_MODEL)
@@ -160,5 +166,12 @@ def load_documents():
 
 
 def reload_documents():
+    global _vectorstore
+    import query as query_module
+    
     vectorstore, rag_chain = load_documents()
+    _vectorstore = vectorstore
+    
+    query_module.cached_vector_search.cache_clear()
+    
     return vectorstore, rag_chain, chunk_count(vectorstore)
