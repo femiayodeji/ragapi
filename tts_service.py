@@ -9,13 +9,32 @@ class TTSService:
     def __init__(self, voice_model="en_US-lessac-medium"):
         self.model_path = f"{VOICE_DIR}/{voice_model}{VOICE_EXTENSION}"
         self.piper_dir = Path(__file__).parent / "piper"
+        self.piper_executable = self._find_piper_executable()
         self.env = self._setup_environment()
         
         try:
-            subprocess.run(["piper", "--version"], capture_output=True, check=True, env=self.env)
+            subprocess.run([self.piper_executable, "--version"], capture_output=True, check=True, env=self.env)
             print(f"Piper TTS with {voice_model}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("WARNING: Piper not found")
+    
+    def _find_piper_executable(self):
+        possible_paths = [
+            "piper",
+            "/usr/local/bin/piper",
+            "/usr/bin/piper",
+            str(Path(__file__).parent / "piper" / "piper" / "piper"),
+        ]
+        
+        for path in possible_paths:
+            try:
+                result = subprocess.run([path, "--version"], capture_output=True, timeout=2)
+                if result.returncode == 0:
+                    return path
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+        
+        return "piper"
     
     def _setup_environment(self):
         env = os.environ.copy()
@@ -40,7 +59,7 @@ class TTSService:
         
         try:
             process = subprocess.Popen(
-                ["piper", "--model", self.model_path, "--output_file", output_file],
+                [self.piper_executable, "--model", self.model_path, "--output_file", output_file],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

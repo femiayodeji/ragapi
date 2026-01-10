@@ -16,9 +16,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+RUN mkdir -p /app/piper && \
+    wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz && \
+    tar -xzf piper_linux_x86_64.tar.gz -C /app/piper/ && \
+    rm piper_linux_x86_64.tar.gz && \
+    chmod +x /app/piper/piper/piper && \
+    /app/piper/piper/piper --version
+
 COPY . .
 
-RUN mkdir -p documents voices chroma_db piper
+RUN mkdir -p documents voices chroma_db
 
 RUN if [ ! -f voices/en_US-lessac-medium.onnx ]; then \
     cd voices && \
