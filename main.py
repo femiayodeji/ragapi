@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import Optional
 import logging
+import asyncio
 import chromadb
 import document_processor
 from config import LLM_MODEL, LLM_PROVIDER, SESSION_BACKEND
@@ -24,6 +25,8 @@ class AppState:
     tts_service = None
     session_service = None
     startup_error = None
+    stt_semaphore = None
+    tts_semaphore = None
 
 
 def init_service(factory, name: str):
@@ -58,6 +61,9 @@ async def lifespan(app: FastAPI):
         lambda: get_session_service(SESSION_BACKEND),
         f"Sessions ({backend})"
     )
+    
+    AppState.stt_semaphore = asyncio.Semaphore(4)
+    AppState.tts_semaphore = asyncio.Semaphore(4)
     
     yield
 

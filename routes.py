@@ -1,6 +1,7 @@
 from fastapi import HTTPException, UploadFile, File, status
 from fastapi.responses import StreamingResponse
 from typing import Optional
+from starlette.concurrency import run_in_threadpool
 import io
 import json
 import uuid
@@ -80,7 +81,9 @@ async def voice_query(audio: UploadFile, session_id: Optional[str], app):
     
     audio_bytes = await audio.read()
     validate_audio(audio_bytes)
-    question = transcribe_audio(app.stt_service, audio_bytes)
+    
+    async with app.stt_semaphore:
+        question = await run_in_threadpool(transcribe_audio, app.stt_service, audio_bytes)
     
     session_id = session_id or str(uuid.uuid4())
     
@@ -106,13 +109,16 @@ async def voice_full(audio: UploadFile, session_id: Optional[str], app):
     
     audio_bytes = await audio.read()
     validate_audio(audio_bytes)
-    question = transcribe_audio(app.stt_service, audio_bytes)
+    
+    async with app.stt_semaphore:
+        question = await run_in_threadpool(transcribe_audio, app.stt_service, audio_bytes)
     
     session_id = session_id or str(uuid.uuid4())
     result = query_module.query_with_session(app.rag_chain, app.session_service, question, session_id)
     answer = result["answer"]
     
-    tts_result = app.tts_service.synthesize(answer)
+    async with app.tts_semaphore:
+        tts_result = await run_in_threadpool(app.tts_service.synthesize, answer)
     if not tts_result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -130,7 +136,8 @@ async def text_to_speech(query: Query, app):
     if not app.tts_service:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="TTS unavailable")
     
-    result = app.tts_service.synthesize(query.question)
+    async with app.tts_semaphore:
+        result = await run_in_threadpool(app.tts_service.synthesize, query.question)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
