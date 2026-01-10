@@ -175,4 +175,3 @@ def query_documents_stream(qa_chain, question: str, session_context: str = None)
     
     for chunk in llm.generate_stream(user_prompt, system_prompt):
         yield chunk
-        yield chunk
