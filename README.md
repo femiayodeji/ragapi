@@ -13,168 +13,504 @@ Multi-provider RAG (Retrieval-Augmented Generation) with voice support and sessi
 - REST API with FastAPI
 - Docker support with Docker Compose
 
-## Quick Setup
+## Prerequisites
 
-### 1. Clone & Setup Environment
+- **Python 3.11+** (for local/venv setup)
+- **Docker & Docker Compose** (for Docker setup)
+- **Redis** (optional - for persistent sessions)
+- **API Keys** for your chosen LLM and embedding providers
+
+## Table of Contents
+
+- [Quick Start](#quick-start-5-minutes)
+- [Docker Setup](#docker-setup-recommended)
+- [Virtual Environment Setup](#virtual-environment-setup)
+- [Voice Features Setup](#voice-features-setup-optional)
+- [API Endpoints](#api-endpoints)
+- [Configuration](#configuration-options)
+- [Troubleshooting](#troubleshooting)
+- [Quick Reference](#quick-reference)
+
+---
+
+## Quick Start (5 Minutes)
+
+Get up and running with the example document already included:
+
+### Using Docker (Easiest)
 
 ```bash
-# Clone repository
-cd ragapp
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-**Note:** On some systems, use `python3` instead of `python`.
-
-### 2. Configure Environment
-
-Copy the example configuration and edit with your API keys:
-
-```bash
+# 1. Configure API keys
 cp .env.example .env
-# Edit .env with your preferred editor
+nano .env  # Add your Groq and Jina AI keys (see links below)
+
+# 2. Start everything
+docker-compose up -d
+
+# 3. Test it (after ~10 seconds)
+curl http://localhost:8000/
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What documents do I need?", "session_id": "demo"}'
 ```
 
-**Minimal configuration** (.env):
+### Using Virtual Environment
 
-```env
-# Required: Choose your LLM provider
-LLM_PROVIDER=groq
-LLM_MODEL=llama-3.3-70b-versatile
-LLM_API_KEY=your_groq_api_key
+```bash
+# 1. Setup environment
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-# Required: Choose your embedding provider
-EMBEDDING_PROVIDER=jinaai
-EMBEDDING_MODEL=jina-embeddings-v3
-EMBEDDING_API_KEY=your_jina_api_key
+# 2. Configure API keys
+cp .env.example .env
+nano .env  # Add your Groq and Jina AI keys
+
+# 3. Run the application
+python3 main.py
+
+# 4. Test it (in another terminal)
+curl http://localhost:8000/
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What documents do I need?", "session_id": "demo"}'
 ```
 
 **Free API Keys:**
-- Groq (fast, free tier): https://console.groq.com/keys
-- Jina AI (free embeddings): https://jina.ai/embeddings
-- Gemini (free tier): https://ai.google.dev/
+- Groq (LLM): https://console.groq.com/keys
+- Jina AI (Embeddings): https://jina.ai/embeddings
 
-### 3. Add Documents and Run
+**Note:** The repository includes a sample PDF in `documents/` folder that is automatically ingested on startup. To add your own documents, simply place PDF files in the `documents/` folder and restart the application or call the `/reload` endpoint.
+
+---
+
+## Docker Setup (Recommended)
+
+Docker setup includes Redis and all dependencies pre-configured.
+
+#### Step 1: Configure Environment
 
 ```bash
-# Place your PDF files in the documents/ folder
+# Create .env file with your configuration
+cat > .env << 'EOF'
+# LLM Provider Configuration
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
+LLM_API_KEY=your_groq_api_key_here
+
+# Embedding Provider Configuration
+EMBEDDING_PROVIDER=jinaai
+EMBEDDING_MODEL=jina-embeddings-v3
+EMBEDDING_API_KEY=your_jina_api_key_here
+
+# Session Configuration
+SESSION_BACKEND=redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+EOF
+```
+
+#### Step 2: Add Your Documents
+
+```bash
+# Create documents folder and add your PDF files
 mkdir -p documents
-cp your-document.pdf documents/
-
-# Start the application
-python main.py
+cp /path/to/your/documents/*.pdf documents/
 ```
 
-Access at **http://localhost:8000**
-
-### Optional: Redis for Session Management
-
-The application works with or without Redis. Without Redis, sessions are stored in memory.
+#### Step 3: Start Services
 
 ```bash
-# Install Redis locally
-sudo apt install redis-server  # Ubuntu/Debian
-brew install redis             # macOS
-
-# Or use Docker
-docker run -d --name redis -p 6379:6379 redis:alpine
-```
-
-### Optional: Voice Features Setup
-
-Voice features require additional dependencies:
-
-**Text-to-Speech (Piper):**
-```bash
-# The application includes a Piper voice model in voices/
-# Model: en_US-lessac-medium.onnx (already included)
-# Install Piper: https://github.com/rhasspy/piper
-
-# Verify voice files exist
-ls voices/
-# Should show: en_US-lessac-medium.onnx, en_US-lessac-medium.onnx.json
-```
-
-**Speech-to-Text (Whisper):**
-```bash
-# Whisper base model is automatically downloaded on first use
-# Requires: pip install openai-whisper (already in requirements.txt)
-```
-
-**Note:** Voice endpoints work even if Piper is not installed - they return appropriate errors.
-
-## Docker Deployment
-
-```bash
-# Start all services (Redis, Ollama, RAG app)
+# Build and start all services (Redis + RAG app)
 docker-compose up -d
+
+# View logs to verify startup
+docker-compose logs -f rag-app
+
+# Wait for "RAG app ready" message
+```
+
+#### Step 4: Test the Application
+
+```bash
+# Health check
+curl http://localhost:8000/
+
+# Test query
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is this document about?", "session_id": "test123"}'
+```
+
+#### Docker Management Commands
+
+```bash
+# Stop services
+docker-compose down
+
+# Restart services
+docker-compose restart
 
 # View logs
 docker-compose logs -f rag-app
 
-# Stop services
-docker-compose down
+# Rebuild after code changes
+docker-compose up -d --build
+
+# Clean up completely
+docker-compose down -v
 ```
+
+---
+
+## Virtual Environment Setup
+
+#### Step 1: Clone & Create Virtual Environment
+
+```bash
+# Navigate to project directory
+cd /path/to/ragapi
+
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate virtual environment
+source .venv/bin/activate  # Linux/Mac
+# OR
+.venv\Scripts\activate     # Windows
+```
+
+#### Step 2: Install Dependencies
+
+```bash
+# Upgrade pip
+pip install --upgrade pip
+
+# Install all dependencies
+pip install -r requirements.txt
+```
+
+**Note:** If you encounter dependency conflicts, ensure you're using Python 3.11+.
+
+#### Step 3: Configure Environment
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+# LLM Provider Configuration
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
+LLM_API_KEY=your_groq_api_key_here
+
+# Embedding Provider Configuration
+EMBEDDING_PROVIDER=jinaai
+EMBEDDING_MODEL=jina-embeddings-v3
+EMBEDDING_API_KEY=your_jina_api_key_here
+
+# Session Configuration (use memory if Redis not available)
+SESSION_BACKEND=memory
+EOF
+```
+
+#### Step 4: Optional - Install Redis
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install redis-server
+sudo systemctl start redis
+
+# macOS
+brew install redis
+brew services start redis
+
+# Or use Docker
+docker run -d --name redis -p 6379:6379 redis:alpine
+
+# Then update .env:
+SESSION_BACKEND=redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
+
+#### Step 5: Add Documents
+
+```bash
+# Create documents folder
+mkdir -p documents
+
+# Add your PDF files
+cp /path/to/your/documents/*.pdf documents/
+```
+
+#### Step 6: Start the Application
+
+```bash
+# Run the application
+python3 main.py
+
+# Or use uvicorn directly
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Step 7: Test the Application
+
+```bash
+# In a new terminal
+curl http://localhost:8000/
+
+# Test query
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is this document about?", "session_id": "test123"}'
+```
+
+---
+
+## Voice Features Setup (Optional)
+
+Voice features work even if components are not installed - endpoints return appropriate errors.
+
+### Text-to-Speech (Piper)
+
+Download the Piper voice model:
+
+```bash
+# Create voices directory
+mkdir -p voices
+cd voices
+
+# Download voice model and config
+wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+
+# Verify files
+ls -lh
+# Should show: en_US-lessac-medium.onnx (~63M), en_US-lessac-medium.onnx.json
+
+# Return to project directory
+cd ..
+```
+
+**Note:** For Docker deployments, voice files in `voices/` folder are automatically mounted to the container.
+
+For additional voices, visit: https://github.com/rhasspy/piper
+
+### Speech-to-Text (Whisper)
+
+Whisper base model is automatically downloaded on first use:
+```bash
+# Models are downloaded to ~/.cache/whisper/
+# Requires: faster-whisper (already in requirements.txt)
+# No manual setup needed
+```
+
+---
+
+## Troubleshooting
+
+### Dependency Issues
+
+**httpx compatibility error:**
+```bash
+# Ensure httpx is pinned to compatible version
+pip install httpx==0.24.1 --force-reinstall
+```
+
+**LangChain version conflicts:**
+```bash
+# Reinstall with exact versions from requirements.txt
+pip install -r requirements.txt --force-reinstall
+```
+
+### Docker Issues
+
+**Container won't start:**
+```bash
+# Check logs
+docker-compose logs rag-app
+
+# Rebuild from scratch
+docker-compose down -v
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+**Port already in use:**
+```bash
+# Change port in docker-compose.yml
+ports:
+  - "8080:8000"  # Use 8080 instead
+```
+
+### Application Issues
+
+**No documents loaded:**
+```bash
+# Ensure PDFs are in documents/ folder
+ls -la documents/
+
+# Trigger reload
+curl -X POST http://localhost:8000/reload
+```
+
+**Redis connection failed:**
+```bash
+# Switch to memory backend in .env
+SESSION_BACKEND=memory
+
+# Or check Redis is running
+redis-cli ping  # Should return PONG
+```
+
+**Voice features not working:**
+```bash
+# Download Piper voice models
+mkdir -p voices
+cd voices
+wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+cd ..
+
+# Verify files exist
+ls -lh voices/
+```
+
+**Import errors or module not found:**
+```bash
+# Ensure virtual environment is activated
+source .venv/bin/activate
+
+# Reinstall dependencies
+pip install -r requirements.txt --force-reinstall
+```
+
+---
+
+## Support & Documentation
+
+- **API Documentation**: http://localhost:8000/docs (when running)
+- **Issues**: Check application logs for detailed error messages
+- **Configuration**: See [.env.example](.env.example) for all options
+
+## License
+
+See LICENSE file for details.
+
+---
 
 ## API Endpoints
 
-### Core RAG
+### Document Query
 
-- **POST /query** - Text query with session support
-  ```bash
-  curl -X POST http://localhost:8000/query \
-    -H "Content-Type: application/json" \
-    -d '{"query": "What is the main topic?", "session_id": "user123"}'
-  ```
+**POST /query** - Query documents with streaming response
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What documents do I need for passport renewal?",
+    "session_id": "user123"
+  }'
+```
 
 ### Voice Features
 
-- **POST /voice-query** - Voice input → text response
-- **POST /voice-full** - Voice input → voice response
-- **POST /text-to-speech** - Convert text to speech
+**POST /voice-query** - Voice input → text response (streaming)
+```bash
+curl -X POST http://localhost:8000/voice-query \
+  -F "audio=@recording.wav" \
+  -F "session_id=user123"
+```
+
+**POST /voice-full** - Voice input → voice response
+```bash
+curl -X POST http://localhost:8000/voice-full \
+  -F "audio=@recording.wav" \
+  -F "session_id=user123" \
+  --output response.wav
+```
+
+**POST /text-to-speech** - Convert text to speech
+```bash
+curl -X POST http://localhost:8000/text-to-speech \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello, how can I help you?"}' \
+  --output speech.wav
+```
 
 ### Document Management
 
-- **POST /reload** - Reload documents from documents/ folder
-- **DELETE /clear** - Clear vector database (requires rebuild)
+**POST /reload** - Reload documents from documents/ folder
+```bash
+curl -X POST http://localhost:8000/reload
+```
+
+**DELETE /clear** - Clear vector database (requires reload after)
+```bash
+curl -X DELETE http://localhost:8000/clear
+```
 
 ### Session Management
 
-- **GET /session/{id}/history** - Get conversation history
-- **DELETE /session/{id}** - Clear session
+**GET /session/{session_id}/history** - Get conversation history
+```bash
+curl http://localhost:8000/session/user123/history
+```
 
-### Status
+**DELETE /session/{session_id}** - Clear session
+```bash
+curl -X DELETE http://localhost:8000/session/user123
+```
 
-- **GET /** - Health check & system status
+### System Status
+
+**GET /** - Health check & system status
+```bash
+curl http://localhost:8000/
+```
+
+**Interactive API Documentation:**
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+---
 
 ## Configuration Options
 
-All configuration is done via `.env` file. See [.env.example](.env.example) for full options.
-
 ### LLM Providers
 
+Configure in `.env` file:
+
+**Groq (Recommended - Fast & Free)**
 ```env
-# Groq (Recommended - Fast & Free)
 LLM_PROVIDER=groq
 LLM_MODEL=llama-3.3-70b-versatile
-LLM_API_KEY=gsk_xxxxx
+LLM_API_KEY=gsk_your_key_here
+```
+Get free key: https://console.groq.com/keys
 
-# OpenAI
+**OpenAI (Paid)**
+```env
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4-turbo-preview
-LLM_API_KEY=sk-xxxxx
+LLM_API_KEY=sk-your_key_here
+```
 
-# Gemini
+**Google Gemini (Free Tier)**
+```env
 LLM_PROVIDER=gemini
 LLM_MODEL=gemini-1.5-flash
-LLM_API_KEY=xxxxx
+LLM_API_KEY=your_key_here
+```
+Get free key: https://ai.google.dev/
 
-# Ollama (Local, no API key needed)
+**Anthropic Claude (Paid)**
+```env
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-sonnet-20240229
+LLM_API_KEY=sk-ant-your_key_here
+```
+
+**Ollama (Local - No API Key)**
+```env
 LLM_PROVIDER=ollama
 LLM_MODEL=llama3.1
 LLM_BASE_URL=http://localhost:11434
@@ -182,172 +518,175 @@ LLM_BASE_URL=http://localhost:11434
 
 ### Embedding Providers
 
+**Jina AI (Recommended - Free)**
 ```env
-# Jina AI (Recommended - Free)
 EMBEDDING_PROVIDER=jinaai
 EMBEDDING_MODEL=jina-embeddings-v3
-EMBEDDING_API_KEY=jina_xxxxx
+EMBEDDING_API_KEY=jina_your_key_here
+```
+Get free key: https://jina.ai/embeddings
 
-# OpenAI
+**OpenAI Embeddings (Paid)**
+```env
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_API_KEY=sk-xxxxx
+EMBEDDING_API_KEY=sk-your_key_here
+```
 
-# Ollama (Local)
+**Google Gemini Embeddings**
+```env
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=text-embedding-004
+EMBEDDING_API_KEY=your_key_here
+```
+
+**Ollama (Local)**
+```env
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_MODEL=nomic-embed-text
-LLM_BASE_URL=http://localhost:11434
+EMBEDDING_BASE_URL=http://localhost:11434
 ```
 
-### Document Processing
+### Additional Settings
 
-```env
-CHUNK_SIZE=1000          # Characters per chunk
-CHUNK_OVERLAP=200        # Overlap between chunks
-TOP_K=3                  # Number of relevant chunks to retrieve
-```
+See [.env.example](.env.example) for complete configuration options including:
+- Document processing (chunk size, overlap, top-k results)
+- Session management (backend, expiration, history limit)
+- Server settings (host, port)
+- Voice features (Whisper model, voice directory)
 
-### Session & Performance
+---
 
-```env
-SESSION_BACKEND=redis    # or "memory"
-SESSION_EXPIRE=3600      # Session timeout in seconds
-SESSION_MAX_HISTORY=10   # Max messages per session
-```
+## Getting Free API Keys
 
-## Project Structure
+### Groq (Recommended - Fast & Free LLM)
+1. Visit: https://console.groq.com/keys
+2. Sign up for a free account
+3. Generate an API key
+4. Use in `.env`:
+   ```env
+   LLM_PROVIDER=groq
+   LLM_MODEL=llama-3.3-70b-versatile
+   LLM_API_KEY=gsk_your_key_here
+   ```
 
-### Core Application
-```
-main.py                  - FastAPI application & startup
-routes.py                - API endpoint definitions
-state.py                 - Application state management
-config.py                - Configuration loader
-```
+### Jina AI (Free Embeddings)
+1. Visit: https://jina.ai/embeddings
+2. Sign up for a free account
+3. Get your API key
+4. Use in `.env`:
+   ```env
+   EMBEDDING_PROVIDER=jinaai
+   EMBEDDING_MODEL=jina-embeddings-v3
+   EMBEDDING_API_KEY=jina_your_key_here
+   ```
 
-### Document Processing & RAG
-```
-document_processor.py    - PDF processing & vector store operations
-embedding_client.py      - Multi-provider embedding client
-llm_client.py           - Multi-provider LLM client
-query.py                - RAG chain & query logic
-command.py              - Document loading orchestration
-```
+### Google Gemini (Free Tier)
+1. Visit: https://ai.google.dev/
+2. Get API key from Google AI Studio
+3. Use in `.env`:
+   ```env
+   LLM_PROVIDER=gemini
+   LLM_MODEL=gemini-1.5-flash
+   LLM_API_KEY=your_key_here
+   ```
 
-### Services
-```
-session_service.py      - Session management (Redis/Memory)
-stt_service.py          - Speech-to-Text (Whisper)
-tts_service.py          - Text-to-Speech (Piper)
-```
+---
 
-### Data & Storage
-```
-documents/              - PDF files to process
-chroma_db/              - ChromaDB vector store
-processed_files.txt     - Tracking processed documents
-```
+## Quick Reference
 
-## Maintenance Guide
+### Document Ingestion
 
-### Adding New Documents
+The application automatically ingests PDF documents from the `documents/` folder on startup.
 
-1. Copy PDFs to `documents/` folder
-2. Restart application or call `/reload` endpoint
-3. Only new/modified documents are processed
-
-### Changing Embedding Model
-
-**Important:** Changing embedding models requires rebuilding the vector store.
+**Adding New Documents:**
 
 ```bash
-# 1. Clear existing database
-curl -X DELETE http://localhost:8000/clear
+# Method 1: Add files and restart
+cp your-document.pdf documents/
+python3 main.py  # or docker-compose restart rag-app
 
-# 2. Update .env with new embedding model
-# 3. Restart application
-python main.py
-```
-
-### Common Tasks
-
-**Check status:**
-```bash
-curl http://localhost:8000/
-```
-
-**Reload documents:**
-```bash
+# Method 2: Hot reload without restart
+cp your-document.pdf documents/
 curl -X POST http://localhost:8000/reload
 ```
 
-**View session history:**
+**How It Works:**
+- Documents are automatically processed into chunks
+- Embeddings are generated and stored in ChromaDB
+- Only new or modified files are processed (tracked in `processed_files.txt`)
+- Typical processing time: ~1-2 seconds per PDF
+
+**Verify Documents Loaded:**
 ```bash
-curl http://localhost:8000/session/{session_id}/history
+# Check status endpoint
+curl http://localhost:8000/
+# Look for: "pdf_count": X, "chunk_count": Y
 ```
 
-### Troubleshooting
+**Clear and Rebuild Database:**
+```bash
+# If you need to reprocess all documents
+curl -X DELETE http://localhost:8000/clear
+# Then restart or call /reload
+```
 
-| Issue | Solution |
-|-------|----------|
-| `python` command not found | Use `python3` instead of `python` on Linux/Mac |
-| Documents not loading | Check PDFs are in `documents/` folder and valid |
-| API key errors | Verify keys in `.env` file, no extra spaces |
-| Redis connection issues | App works without Redis (uses memory sessions)<br>Install: `sudo apt install redis-server` or Docker |
-| Voice features not working | Piper TTS is optional - see Voice Features Setup<br>Whisper auto-downloads on first use |
-| Out of memory | Reduce `CHUNK_SIZE`, `TOP_K` in `.env`<br>Use lighter models (gemini-1.5-flash) |
-| ChromaDB telemetry errors | Harmless warnings, can be ignored - telemetry is disabled |
-
-## Deployment
-
-### Render
-
-1. Push your code to GitHub
-2. Create new Web Service on Render
-3. Configure:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python main.py`
-4. Add environment variables from your `.env` file
-5. Deploy
-
-### Docker
+### Common Commands
 
 ```bash
-# Start all services (Redis, Ollama, RAG app)
+# Start application (venv)
+python3 main.py
+
+# Start with Docker
 docker-compose up -d
 
-# View logs
+# View Docker logs
 docker-compose logs -f rag-app
 
-# Stop services
+# Stop Docker services
 docker-compose down
+
+# Rebuild Docker after code changes
+docker-compose up -d --build
+
+# Health check
+curl http://localhost:8000/
+
+# Query endpoint
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is this about?", "session_id": "test"}'
+
+# Add new document and reload
+cp new-doc.pdf documents/
+curl -X POST http://localhost:8000/reload
+
+# Check Python environment
+which python3
+pip list | grep -E "langchain|chromadb|httpx"
 ```
 
-### Other Platforms
+### File Structure
 
-The application is compatible with any platform supporting Python 3.9+:
-- Set build command: `pip install -r requirements.txt`
-- Set start command: `python main.py`
-- Configure environment variables
-- Ensure port 8000 is exposed
+```
+ragapi/
+├── documents/              # 📁 Place your PDF files here
+│   └── *.pdf              # Automatically ingested on startup
+├── voices/                 # 🔊 Piper TTS voice models
+├── chroma_db/              # 💾 ChromaDB vector store (auto-generated)
+├── .env                    # ⚙️ Your configuration (copy from .env.example)
+├── processed_files.txt     # 📝 Tracks processed documents
+├── main.py                 # 🚀 Application entry point
+├── requirements.txt        # 📦 Python dependencies
+├── Dockerfile              # 🐳 Docker image definition
+├── docker-compose.yml      # 🐳 Docker services configuration
+└── README.md               # 📖 This file
+```
 
-## Development
+---
 
-### Code Structure
-
-The application follows a modular design:
-- **Services** are initialized in `main.py` lifespan
-- **State** is managed in `state.py` (AppState)
-- **Routes** are defined in `routes.py`
-- **Configuration** is centralized in `config.py`
-
-### Adding New Provider
-
-**LLM Provider** - Update `llm_client.py`
-**Embedding Provider** - Update `embedding_client.py`
-
-See inline code comments for implementation patterns.
+- **Configuration**: See [.env.example](.env.example) for all options
 
 ## License
 
-MIT
+MIT License - See LICENSE file for details.

@@ -22,8 +22,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./documents:/app/documents
       - ./chroma_db:/app/chroma_db
       - ./processed_files.txt:/app/processed_files.txt
+      - ./voices:/app/voices
     env_file:
       - .env
     environment:

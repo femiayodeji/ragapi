@@ -27,20 +27,19 @@ def validate_audio(audio_bytes: bytes):
 
 
 def transcribe_audio(stt_service, audio_bytes: bytes) -> str:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-        f.write(audio_bytes)
-        temp_path = f.name
+    result = stt_service.transcribe(audio_bytes)
     
-    try:
-        result = stt_service.model.transcribe(temp_path)
-        text = result["text"].strip()
-        if not text:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No speech detected")
-        return text
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Transcription failed: {e}")
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Transcription failed: {result.get('error', 'Unknown error')}"
+        )
+    
+    text = result["text"]
+    if not text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No speech detected")
+    
+    return text
 
 
 async def query_endpoint(query: Query, app):
