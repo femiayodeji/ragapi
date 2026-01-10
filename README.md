@@ -102,18 +102,11 @@ See [.env.example](.env.example) for all options.
 
 ## Voice Features (Optional)
 
-### Setup
-
 **Docker:** Automatically configured during build.
 
-**Venv:** 
+**Venv:** Run setup script (installs piper + voice model):
 ```bash
 ./setup_piper.sh
-
-mkdir -p voices && cd voices
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
-cd ..
 ```
 
 ### Usage
