@@ -41,15 +41,16 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Add documents
+# Add new PDF
 mkdir -p documents
 cp your-files/*.pdf documents/
+
+# Setup voice support (optional)
+./setup_piper.sh
 
 # Run
 python3 main.py
 ```
-
-> **Voice support:** See [Voice Features](#voice-features-optional) section below.
 
 ### 4. Test
 
