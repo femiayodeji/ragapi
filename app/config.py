@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-PDF_DIR = "documents"
-CHROMA_DIR = "chroma_db"
+PDF_DIR = "data/documents"
+CHROMA_DIR = "storage/chroma_db"
 PROCESSED_FILES = "processed_files.txt"
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
@@ -38,7 +38,7 @@ SESSION_KEY_PREFIX = os.getenv("SESSION_KEY_PREFIX", "session:")
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 
-VOICE_DIR = os.getenv("VOICE_DIR", "voices")
+VOICE_DIR = "voices"
 VOICE_EXTENSION = ".onnx"
 AUDIO_EXTENSION = ".wav"
 

@@ -38,9 +38,14 @@ ENV ESPEAK_DATA_PATH=/app/piper/espeak-ng-data
 
 RUN /app/piper/piper/piper --version
 
-COPY . .
+COPY app/ app/
+COPY requirements.txt pytest.ini .env* ./
 
-RUN mkdir -p documents voices chroma_db
+RUN mkdir -p data/documents voices storage/chroma_db && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
 
 RUN if [ ! -f voices/en_US-lessac-medium.onnx ]; then \
     cd voices && \
@@ -49,6 +54,8 @@ RUN if [ ! -f voices/en_US-lessac-medium.onnx ]; then \
     fi
 
 EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/ || exit 1

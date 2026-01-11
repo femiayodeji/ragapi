@@ -3,7 +3,8 @@ from typing import List
 from openai import OpenAI
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.embeddings import Embeddings
-from config import (EMBEDDING_MODEL, EMBEDDING_PROVIDER, LLM_PROVIDER, 
+
+from app.config import (EMBEDDING_MODEL, EMBEDDING_PROVIDER, LLM_PROVIDER, 
                    EMBEDDING_API_KEY, EMBEDDING_BASE_URL, LLM_API_KEY, LLM_BASE_URL, PROVIDER_URLS)
 
 

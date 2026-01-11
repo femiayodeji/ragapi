@@ -7,8 +7,9 @@ import json
 import uuid
 import logging
 import tempfile
-from models import Query
-import query as query_module
+
+from app.models import Query
+from app.core import query as query_module
 
 logger = logging.getLogger(__name__)
 
@@ -146,34 +147,8 @@ async def text_to_speech(query: Query, app):
     return StreamingResponse(io.BytesIO(result["audio_bytes"]), media_type="audio/wav")
 
 
-async def session_history(session_id: str, app):
-    if not app.session_service:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Session service unavailable")
-    
-    if not app.session_service.session_exists(session_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    
-    messages = app.session_service.get_history(session_id)
-    return {
-        "session_id": session_id,
-        "message_count": len(messages),
-        "messages": messages
-    }
-
-
-async def clear_session(session_id: str, app):
-    if not app.session_service:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Session service unavailable")
-    
-    if not app.session_service.session_exists(session_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    
-    app.session_service.clear_session(session_id)
-    return {"message": "Session cleared", "session_id": session_id}
-
-
 async def reload_documents(app):
-    import document_processor
+    from app.services import document_processor
     
     logger.info("Reloading documents...")
     app.vectorstore, app.rag_chain, count = document_processor.reload_documents()
@@ -183,7 +158,7 @@ async def reload_documents(app):
 
 
 async def clear_database(app):
-    import document_processor
+    from app.services import document_processor
     
     logger.info("Clearing database...")
     document_processor.clear_all()

@@ -5,13 +5,14 @@ from typing import Optional
 import logging
 import asyncio
 import chromadb
-import document_processor
-from config import LLM_MODEL, LLM_PROVIDER, SESSION_BACKEND
-from stt_service import STTService
-from tts_service import TTSService
-from session_service import get_session_service
-from models import Query
-import routes
+
+from app.config import LLM_MODEL, LLM_PROVIDER, SESSION_BACKEND
+from app.models import Query
+from app.services import document_processor
+from app.services.stt_service import STTService
+from app.services.tts_service import TTSService
+from app.services.session_service import get_session_service
+from app.api import routes
 
 logging.basicConfig(level=logging.WARNING)
 logging.getLogger("__main__").setLevel(logging.INFO)
@@ -98,16 +99,6 @@ async def tts_route(query: Query):
     return await routes.text_to_speech(query, AppState)
 
 
-@app.get("/session/{session_id}/history")
-async def session_history_route(session_id: str):
-    return await routes.session_history(session_id, AppState)
-
-
-@app.delete("/session/{session_id}")
-async def clear_session_route(session_id: str):
-    return await routes.clear_session(session_id, AppState)
-
-
 @app.post("/reload")
 async def reload_route():
     return await routes.reload_documents(AppState)
@@ -118,13 +109,13 @@ async def clear_route():
     return await routes.clear_database(AppState)
 
 
-@app.get("/")
-async def root():
+@app.get("/health")
+async def health():
     pdf_files = document_processor.get_pdf_files()
     chunk_count = document_processor.chunk_count(AppState.vectorstore)
     
     return {
-        "status": "running",
+        "status": "healthy" if AppState.vectorstore else "degraded",
         "services": {
             "documents": AppState.vectorstore is not None,
             "session": AppState.session_service is not None,
@@ -139,7 +130,17 @@ async def root():
     }
 
 
+@app.get("/")
+async def root():
+    return {
+        "service": "RAG Voice Assistant",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
-    from config import SERVER_HOST, SERVER_PORT
+    from app.config import SERVER_HOST, SERVER_PORT
     uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)

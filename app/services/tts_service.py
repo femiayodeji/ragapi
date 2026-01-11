@@ -2,7 +2,8 @@ import subprocess
 import os
 import tempfile
 from pathlib import Path
-from config import VOICE_DIR, VOICE_EXTENSION, AUDIO_EXTENSION
+
+from app.config import VOICE_DIR, VOICE_EXTENSION, AUDIO_EXTENSION
 
 
 class TTSService:
@@ -20,7 +21,8 @@ class TTSService:
     
     def _find_piper_executable(self):
         possible_paths = [
-            str(Path(__file__).parent / "piper" / "piper" / "piper"),
+            str(Path(__file__).parent.parent.parent / "piper" / "piper" / "piper"),
+            str(Path(__file__).parent.parent.parent / "scripts" / "piper" / "piper" / "piper"),
             "/app/piper/piper/piper",
             "piper",
             "/usr/local/bin/piper",
