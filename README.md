@@ -4,6 +4,24 @@ Intelligent interface for citizens to engage with government services via voice 
 
 ---
 
+## Quick Demo
+
+**Live API:** https://ragapp-5avd.onrender.com/docs  
+**Frontend Demo:** https://ragov.netlify.app/
+
+> ⚠️ **Note:** Demo runs on free-tier infrastructure with limited resources. You may experience cold starts (30-60s), timeouts during high traffic, or automatic restarts. For production performance, see self-hosting instructions below.
+
+---
+
+## Key Features
+
+- **1000 concurrent users** via async FastAPI + GPU worker pools
+- **Zero-egress** architecture (all models self-hosted)
+- **Sub-2s latency** for voice-to-text responses (production setup)
+- **RAG accuracy** with hallucination mitigation
+
+---
+
 ## Project Structure
 
 ```
