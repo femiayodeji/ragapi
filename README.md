@@ -118,7 +118,7 @@ cp .env.example .env
 nano .env
 ```
 
-### 3. Add Documents
+### 3. Add New Documents
 
 ```bash
 mkdir -p data/documents

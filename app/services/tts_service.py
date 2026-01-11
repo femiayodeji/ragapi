@@ -21,7 +21,8 @@ class TTSService:
     
     def _find_piper_executable(self):
         possible_paths = [
-            str(Path(__file__).parent / "piper" / "piper" / "piper"),
+            str(Path(__file__).parent.parent.parent / "piper" / "piper" / "piper"),
+            str(Path(__file__).parent.parent.parent / "scripts" / "piper" / "piper" / "piper"),
             "/app/piper/piper/piper",
             "piper",
             "/usr/local/bin/piper",

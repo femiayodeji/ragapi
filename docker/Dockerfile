@@ -41,7 +41,11 @@ RUN /app/piper/piper/piper --version
 COPY app/ app/
 COPY requirements.txt pytest.ini .env* ./
 
-RUN mkdir -p data/documents voices storage/chroma_db
+RUN mkdir -p data/documents voices storage/chroma_db && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
 
 RUN if [ ! -f voices/en_US-lessac-medium.onnx ]; then \
     cd voices && \

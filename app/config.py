@@ -38,7 +38,7 @@ SESSION_KEY_PREFIX = os.getenv("SESSION_KEY_PREFIX", "session:")
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 
-VOICE_DIR = os.getenv("VOICE_DIR", "voices")
+VOICE_DIR = "voices"
 VOICE_EXTENSION = ".onnx"
 AUDIO_EXTENSION = ".wav"
 
