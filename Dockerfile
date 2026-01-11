@@ -17,9 +17,20 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /app/piper && \
-    wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz && \
-    tar -xzf piper_linux_x86_64.tar.gz -C /app/piper/ && \
-    rm piper_linux_x86_64.tar.gz && \
+    ARCH=$(uname -m) && \
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]') && \
+    if [ "$OS" = "darwin" ]; then \
+        PIPER_FILE="piper_macos_x86_64.tar.gz"; \
+    else \
+        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+            PIPER_FILE="piper_linux_aarch64.tar.gz"; \
+        else \
+            PIPER_FILE="piper_linux_x86_64.tar.gz"; \
+        fi; \
+    fi && \
+    wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/$PIPER_FILE && \
+    tar -xzf $PIPER_FILE -C /app/piper/ && \
+    rm $PIPER_FILE && \
     chmod +x /app/piper/piper/piper && \
     /app/piper/piper/piper --version
 
