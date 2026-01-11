@@ -31,8 +31,12 @@ RUN mkdir -p /app/piper && \
     wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/$PIPER_FILE && \
     tar -xzf $PIPER_FILE -C /app/piper/ && \
     rm $PIPER_FILE && \
-    chmod +x /app/piper/piper/piper && \
-    /app/piper/piper/piper --version
+    chmod +x /app/piper/piper/piper
+
+ENV LD_LIBRARY_PATH=/app/piper:$LD_LIBRARY_PATH
+ENV ESPEAK_DATA_PATH=/app/piper/espeak-ng-data
+
+RUN /app/piper/piper/piper --version
 
 COPY . .
 

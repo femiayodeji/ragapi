@@ -20,35 +20,50 @@ class TTSService:
     
     def _find_piper_executable(self):
         possible_paths = [
+            str(Path(__file__).parent / "piper" / "piper" / "piper"),
+            "/app/piper/piper/piper",
             "piper",
             "/usr/local/bin/piper",
             "/usr/bin/piper",
-            str(Path(__file__).parent / "piper" / "piper" / "piper"),
         ]
         
         for path in possible_paths:
-            try:
-                result = subprocess.run([path, "--version"], capture_output=True, timeout=2)
-                if result.returncode == 0:
-                    return path
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                continue
+            if os.path.exists(path) or path in ["piper"]:
+                try:
+                    env = self._setup_environment_for_path(path)
+                    result = subprocess.run([path, "--version"], capture_output=True, timeout=2, env=env)
+                    if result.returncode == 0:
+                        return path
+                except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
+                    continue
         
-        return "piper"
+        raise FileNotFoundError("Piper executable not found. Please run setup_piper.sh")
     
-    def _setup_environment(self):
+    def _setup_environment_for_path(self, piper_path):
         env = os.environ.copy()
-        if self.piper_dir.exists():
-            ld_library_path = str(self.piper_dir)
+        
+        # Determine piper directory from executable path
+        piper_executable = Path(piper_path)
+        if piper_executable.is_absolute() and piper_executable.exists():
+            piper_lib_dir = piper_executable.parent.parent
+        else:
+            piper_lib_dir = self.piper_dir
+        
+        if piper_lib_dir.exists():
+            ld_library_path = str(piper_lib_dir)
             if "LD_LIBRARY_PATH" in env:
                 env["LD_LIBRARY_PATH"] = f"{ld_library_path}:{env['LD_LIBRARY_PATH']}"
             else:
                 env["LD_LIBRARY_PATH"] = ld_library_path
             
-            espeak_data = self.piper_dir / "espeak-ng-data"
+            espeak_data = piper_lib_dir / "espeak-ng-data"
             if espeak_data.exists():
                 env["ESPEAK_DATA_PATH"] = str(espeak_data)
+        
         return env
+    
+    def _setup_environment(self):
+        return self._setup_environment_for_path(self.piper_executable)
     
     def synthesize(self, text: str) -> dict:
         if not os.path.exists(self.model_path):
