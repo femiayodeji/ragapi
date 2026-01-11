@@ -39,6 +39,7 @@ ENV ESPEAK_DATA_PATH=/app/piper/espeak-ng-data
 RUN /app/piper/piper/piper --version
 
 COPY app/ app/
+COPY data/ data/
 COPY requirements.txt pytest.ini .env* ./
 
 RUN mkdir -p data/documents voices storage/chroma_db && \
