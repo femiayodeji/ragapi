@@ -17,9 +17,7 @@ services:
     restart: unless-stopped
 
   rag-app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
+    build: .
     container_name: rag-api
     ports:
       - "8000:8000"

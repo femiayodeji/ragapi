@@ -28,7 +28,7 @@ ragapi/
 ```bash
 # Dev: python -m uvicorn app.main:app --reload
 # Prod: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-# Docker: docker-compose -f docker/docker-compose.yml up -d
+# Docker: docker-compose up -d
 # Tests: pytest tests/ -v
 ```
 
@@ -130,7 +130,7 @@ cp your-files/*.pdf data/documents/
 #### Option A: Docker (Recommended)
 
 ```bash
-docker-compose -f docker/docker-compose.yml up -d
+docker-compose up -d
 ```
 
 #### Option B: Virtual Environment
@@ -297,7 +297,7 @@ curl http://localhost:8000/health
 
 **Horizontal scaling:**
 ```bash
-docker-compose -f docker/docker-compose.yml up --scale rag-api=5
+docker-compose up --scale rag-api=5
 ```
 
 **Production considerations:**
