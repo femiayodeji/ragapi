@@ -2,7 +2,8 @@ from typing import List
 from datetime import datetime
 import json
 import redis
-from config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD, SESSION_EXPIRE, SESSION_KEY_PREFIX
+
+from app.config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD, SESSION_EXPIRE, SESSION_KEY_PREFIX
 
 
 class SessionService:

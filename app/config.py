@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-PDF_DIR = "documents"
-CHROMA_DIR = "chroma_db"
+PDF_DIR = "data/documents"
+CHROMA_DIR = "storage/chroma_db"
 PROCESSED_FILES = "processed_files.txt"
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")

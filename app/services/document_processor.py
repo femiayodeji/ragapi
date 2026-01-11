@@ -6,8 +6,9 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from config import CHROMA_DIR, PROCESSED_FILES, PDF_DIR, CHUNK_SIZE, CHUNK_OVERLAP
-from embedding_client import get_embeddings
+
+from app.config import CHROMA_DIR, PROCESSED_FILES, PDF_DIR, CHUNK_SIZE, CHUNK_OVERLAP
+from app.clients.embedding_client import get_embeddings
 
 # Track vectorstore for caching
 _vectorstore = None
@@ -122,8 +123,8 @@ def process_pdfs() -> List[Document]:
 
 
 def load_documents():
-    from config import EMBEDDING_MODEL, EMBEDDING_PROVIDER, LLM_PROVIDER
-    import query
+    from app.config import EMBEDDING_MODEL, EMBEDDING_PROVIDER, LLM_PROVIDER
+    from app.core import query
     
     provider = EMBEDDING_PROVIDER or LLM_PROVIDER
     embeddings = get_embeddings()
@@ -167,7 +168,7 @@ def load_documents():
 
 def reload_documents():
     global _vectorstore
-    import query as query_module
+    from app.core import query as query_module
     
     vectorstore, rag_chain = load_documents()
     _vectorstore = vectorstore

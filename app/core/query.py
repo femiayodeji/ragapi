@@ -1,11 +1,10 @@
 from functools import lru_cache
-
 from langchain.schema import Document
 
-from config import TOP_K, SESSION_MAX_HISTORY
-from llm_client import get_llm_client
-from query_validator import validator
-import document_processor
+from app.config import TOP_K, SESSION_MAX_HISTORY
+from app.clients.llm_client import get_llm_client
+from app.core.query_validator import validator
+from app.services import document_processor
 
 
 SYSTEM_PROMPT = """You are a helpful government service assistant specializing in passport and immigration services.

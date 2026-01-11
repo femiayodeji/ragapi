@@ -2,7 +2,8 @@ import subprocess
 import os
 import tempfile
 from pathlib import Path
-from config import VOICE_DIR, VOICE_EXTENSION, AUDIO_EXTENSION
+
+from app.config import VOICE_DIR, VOICE_EXTENSION, AUDIO_EXTENSION
 
 
 class TTSService:

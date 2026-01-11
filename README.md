@@ -1,6 +1,103 @@
-# RAG Application
+# RAG Voice-First Government Service Assistant
 
-Multi-provider RAG API with voice support and session management.
+Intelligent interface for citizens to engage with government services via voice or text. Backend RESTful API implementing RAG pattern with multi-modal input support.
+
+---
+
+## Project Structure
+
+```
+ragapi/
+├── app/                          # Main application
+│   ├── main.py                   # FastAPI entry point
+│   ├── config.py                 # Configuration
+│   ├── models.py                 # Pydantic models
+│   ├── api/                      # API routes
+│   ├── services/                 # STT, TTS, documents, sessions
+│   ├── clients/                  # LLM, embedding clients
+│   └── core/                     # Query processing & validation
+├── tests/                        # Test suite
+├── data/documents/               # PDF files
+├── storage/chroma_db/            # Vector database
+├── docker/                       # Containerization
+├── scripts/                      # Setup scripts
+└── requirements.txt
+```
+
+**Run Commands:**
+```bash
+# Dev: python -m uvicorn app.main:app --reload
+# Prod: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Docker: docker-compose -f docker/docker-compose.yml up -d
+# Tests: pytest tests/ -v
+```
+
+---
+
+## Architecture
+
+```
+┌─────────────┐
+│   Client    │
+│ (Voice/Text)│
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────────────────────────┐
+│         FastAPI (Async Routes)          │
+├─────────────────────────────────────────┤
+│  /query  │  /voice-query  │  /voice-full│
+└────┬──────────────┬──────────────┬──────┘
+     │              │              │
+     │         ┌────▼─────┐        │
+     │         │   STT    │        │
+     │         │ (Whisper)│        │
+     │         └────┬─────┘        │
+     │              │              │
+     └──────────────┴──────────────┘
+                    │
+            ┌───────▼────────┐
+            │ Query Validator│
+            └───────┬────────┘
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+   ┌────▼─────┐         ┌──────▼──────┐
+   │ ChromaDB │         │   Session   │
+   │ (Vector  │         │   Service   │
+   │  Store)  │         │   (Redis)   │
+   └────┬─────┘         └──────┬──────┘
+        │                      │
+        │  Relevant Chunks     │  History
+        │                      │
+        └──────────┬───────────┘
+                   │
+            ┌──────▼──────┐
+            │  LLM Client │
+            │ (Multi-API) │
+            └──────┬──────┘
+                   │
+            ┌──────▼──────┐
+            │   Response  │
+            └──────┬──────┘
+                   │
+            ┌──────▼──────┐
+            │     TTS     │
+            │   (Piper)   │
+            └─────────────┘
+```
+
+### Design Decisions
+
+**STT/TTS**: Embedded models (faster-whisper, Piper) for low latency and offline capability
+
+**LLM**: API-based with multi-provider support (Groq, OpenAI, Gemini) for scalability
+
+**Vector DB**: ChromaDB for persistent embeddings and fast similarity search
+
+**Sessions**: Redis-backed for distributed scalability, in-memory fallback for development
+
+**Streaming**: Server-Sent Events for progressive responses, reduces perceived latency
 
 ---
 
@@ -18,38 +115,35 @@ git clone <your-repo-url>
 cd ragapi
 
 cp .env.example .env
-nano .env  # Add your API keys
+nano .env
 ```
 
-### 3. Choose Your Setup
+### 3. Add Documents
+
+```bash
+mkdir -p data/documents
+cp your-files/*.pdf data/documents/
+```
+
+### 4. Choose Your Setup
 
 #### Option A: Docker (Recommended)
 
 ```bash
-mkdir -p documents
-cp your-files/*.pdf documents/
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml up -d
 ```
 
 #### Option B: Virtual Environment
 
 ```bash
-# Create and activate venv
 python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Add new PDF
-mkdir -p documents
-cp your-files/*.pdf documents/
+bash scripts/setup_piper.sh
 
-# Setup voice support (optional)
-./setup_piper.sh
-
-# Run
-python3 main.py
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 4. Test
@@ -62,6 +156,8 @@ curl -X POST http://localhost:8000/query \
 ```
 
 **API Docs:** http://localhost:8000/docs
+
+**Health Check:** http://localhost:8000/health
 
 ---
 
@@ -107,7 +203,7 @@ See [.env.example](.env.example) for all options.
 
 **Venv:** Run setup script (installs piper + voice model):
 ```bash
-./setup_piper.sh
+bash scripts/setup_piper.sh
 ```
 
 ### Usage
@@ -140,17 +236,31 @@ DELETE /clear    # Clear database
 GET /            # Status
 ```
 
-### Sessions
-```bash
-GET /session/{id}/history    # View history
-DELETE /session/{id}         # Clear session
-```
-
 ### Voice
 ```bash
 POST /voice-query           # Speech → Text → Answer
 POST /voice-full            # Speech → Text → Answer → Speech
 POST /text-to-speech        # Text → Speech
+```
+
+### Health
+```bash
+GET /health                 # Service status and metrics
+GET /                       # API info
+```
+
+---
+
+## Testing
+
+### Run Tests
+```bash
+pytest tests/ -v
+```
+
+### Test Coverage
+```bash
+pytest tests/ --cov=. --cov-report=html
 ```
 
 ---
@@ -163,8 +273,56 @@ docker-compose down
 # Or change port in docker-compose.yml: "8080:8000"
 ```
 
-**Dependencies error:**
+curl -X POST http://localhost:8000/reload
+```
+
+**Health check fails:**
 ```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## Performance
+
+### Latency Optimizations
+
+- **Streaming responses**: Progressive output reduces time-to-first-token
+- **Model caching**: LRU cache for vector searches (100 queries)
+- **Async I/O**: Non-blocking operations throughout
+- **Rate limiting**: Semaphores prevent resource saturation
+- **Optimized models**: faster-whisper (4x faster), int8 quantization
+
+### Scalability
+
+**Horizontal scaling:**
+```bash
+docker-compose -f docker/docker-compose.yml up --scale rag-api=5
+```
+
+**Production considerations:**
+- Add nginx load balancer
+- Use managed Redis (AWS ElastiCache)
+- Configure auto-scaling policies
+- Monitor with Prometheus/Grafana
+
+---
+
+## Accuracy & Safety
+
+### Hallucination Prevention
+
+- Context-only responses enforced via system prompts
+- Out-of-scope query detection and redirection
+- Document source tracking in metadata
+- Explicit handling of missing information
+
+### Input Validation
+
+- Audio file size limits (10MB)
+- Question length constraints
+- Empty input detection
+- Session validationbash
 pip install -r requirements.txt --force-reinstall
 ```
 
@@ -182,7 +340,7 @@ SESSION_BACKEND=memory
 
 **No documents loaded:**
 ```bash
-ls documents/  # Check files exist
+ls data/documents/
 curl -X POST http://localhost:8000/reload
 ```
 

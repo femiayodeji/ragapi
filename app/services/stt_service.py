@@ -1,7 +1,8 @@
 from faster_whisper import WhisperModel
 import tempfile
 import os
-from config import WHISPER_MODEL, AUDIO_EXTENSION
+
+from app.config import WHISPER_MODEL, AUDIO_EXTENSION
 
 
 class STTService:
