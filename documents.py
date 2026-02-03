@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List
 from pypdf import PdfReader
 from chromadb import Client
@@ -33,9 +34,17 @@ def load_pdfs():
         text = " ".join([page.extract_text() for page in reader.pages])
         chunks = chunk_text(text)
         
-        embeddings = get_embeddings(chunks)
+        batch_size = 20
+        all_embeddings = []
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            embeddings = get_embeddings(batch)
+            all_embeddings.extend(embeddings)
+            if i + batch_size < len(chunks):
+                time.sleep(0.5)
+        
         ids = [f"{pdf_file}_{i}" for i in range(len(chunks))]
         
-        collection.add(embeddings=embeddings, documents=chunks, ids=ids)
+        collection.add(embeddings=all_embeddings, documents=chunks, ids=ids)
     
     return collection
