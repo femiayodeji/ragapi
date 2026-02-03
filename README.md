@@ -4,15 +4,6 @@ Intelligent interface for citizens to engage with government services via voice 
 
 ---
 
-## Quick Demo
-
-**Live API:** https://ragapp-5avd.onrender.com/docs  
-**Frontend Demo:** https://ragov.netlify.app/
-
-> ⚠️ **Note:** Demo runs on free-tier infrastructure with limited resources. You may experience cold starts (30-60s), timeouts during high traffic, or automatic restarts. For production performance, see self-hosting instructions below.
-
----
-
 ## Key Features
 
 - **1000 concurrent users** via async FastAPI + GPU worker pools
@@ -26,28 +17,25 @@ Intelligent interface for citizens to engage with government services via voice 
 
 ```
 ragapi/
-├── app/                          # Main application
-│   ├── main.py                   # FastAPI entry point
-│   ├── config.py                 # Configuration
-│   ├── models.py                 # Pydantic models
-│   ├── api/                      # API routes
-│   ├── services/                 # STT, TTS, documents, sessions
-│   ├── clients/                  # LLM, embedding clients
-│   └── core/                     # Query processing & validation
-├── tests/                        # Test suite
+├── main.py                       # FastAPI entry point
+├── config.py                     # Configuration
+├── query.py                      # RAG query processing
+├── documents.py                  # Document loading & vector DB
+├── voice.py                      # STT & TTS (Whisper, Piper)
+├── pyproject.toml                # Dependencies (modern standard)
 ├── data/documents/               # PDF files
 ├── storage/chroma_db/            # Vector database
-├── docker/                       # Containerization
-├── scripts/                      # Setup scripts
-└── requirements.txt
+├── voices/                       # TTS voice models
+├── piper/                        # Piper TTS binaries
+├── Dockerfile                    # Container config
+└── docker-compose.yml            # Multi-service orchestration
 ```
 
 **Run Commands:**
 ```bash
-# Dev: python -m uvicorn app.main:app --reload
-# Prod: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Dev (with UV): uv run uvicorn main:app --reload
+# Dev (traditional): uvicorn main:app --reload
 # Docker: docker-compose up -d
-# Tests: pytest tests/ -v
 ```
 
 ---
@@ -145,23 +133,26 @@ cp your-files/*.pdf data/documents/
 
 ### 4. Choose Your Setup
 
-#### Option A: Docker (Recommended)
+#### Option A: Docker (Recommended for Production)
 
 ```bash
 docker-compose up -d
 ```
 
-#### Option B: Virtual Environment
+#### Option B: UV (Recommended for Development)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+# Install UV if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-pip install -r requirements.txt
+# Install dependencies
+uv sync
 
-bash scripts/setup_piper.sh
+# Download Piper TTS (run once)
+bash run.sh setup
 
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Run the server
+uv run uvicorn main:app --reload
 ```
 
 ### 4. Test
@@ -184,119 +175,76 @@ curl -X POST http://localhost:8000/query \
 Edit `.env` file:
 
 ```env
-# Required
-LLM_PROVIDER=groq
+# Jina AI (Embeddings)
+JINA_API_KEY=your_jina_key
+JINA_BASE_URL=https://api.jina.ai/v1
+JINA_MODEL=jina-embeddings-v3
+
+# Groq (LLM)
+GROQ_API_KEY=your_groq_key
+GROQ_BASE_URL=https://api.groq.com/openai/v1
 LLM_MODEL=llama-3.3-70b-versatile
-LLM_API_KEY=your_groq_key
 
-EMBEDDING_PROVIDER=jinaai
-EMBEDDING_MODEL=jina-embeddings-v3
-EMBEDDING_API_KEY=your_jina_key
-
-# Optional
-SESSION_BACKEND=redis  # or 'memory'
-REDIS_HOST=redis  # Use 'localhost' for venv setup
+# Whisper STT
+WHISPER_MODEL=base
 ```
 
-### Supported Providers
+### API Providers
 
-**LLM:**
-- `groq` - Free, fast (recommended)
-- `openai` - GPT models
-- `gemini` - Google Gemini (free)
-- `ollama` - Local models
+**Current Setup:**
+- **LLM:** Groq (llama-3.3-70b-versatile) - Fast, free tier available
+- **Embeddings:** Jina AI (jina-embeddings-v3) - Free, high quality
+- **STT:** Faster-Whisper (local) - Fast, runs offline
+- **TTS:** Piper (local) - Natural voices, runs offline
 
-**Embeddings:**
-- `jinaai` - Free, good quality (recommended)
-- `openai` - text-embedding-3-small
-- `ollama` - Local embeddings
-
-See [.env.example](.env.example) for all options.
+All providers use OpenAI-compatible APIs for easy swapping.
 
 ---
 
-## Voice Features (Optional)
+## Voice Features
 
-**Docker:** Automatically configured during build.
+**Docker:** Piper TTS is automatically installed and voice models downloaded during build.
 
-**Venv:** Run setup script (installs piper + voice model):
+**Local:** Download Piper and voice models:
 ```bash
-bash scripts/setup_piper.sh
+bash run.sh setup
 ```
 
 ### Usage
 
 ```bash
-# Text to Speech
+# Text to Speech (WAV output)
 curl -X POST http://localhost:8000/text-to-speech \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello world"}' \
+  -d '{"question": "What documents can I upload?"}' \
   --output speech.wav
 
-# Voice Query
-curl -X POST http://localhost:8000/voice-query -F "audio=@question.wav"
+# Voice Query (Audio input → Streaming text answer)
+curl -X POST http://localhost:8000/voice-query \
+  -F "audio=@question.wav" \
+  -F "session_id=demo123"
 ```
 
 ---
 
 ## API Endpoints
 
-### Query
+### Query (Streaming)
 ```bash
 POST /query
 {"question": "your question", "session_id": "optional"}
-```
-
-### Documents
-```bash
-POST /reload     # Reload documents
-DELETE /clear    # Clear database
-GET /            # Status
+# Returns: Server-Sent Events (text/event-stream)
 ```
 
 ### Voice
 ```bash
-POST /voice-query           # Speech → Text → Answer
-POST /voice-full            # Speech → Text → Answer → Speech
-POST /text-to-speech        # Text → Speech
+POST /voice-query           # Audio file → Transcription → Streaming answer
+POST /text-to-speech        # Text → WAV audio (16-bit PCM, 22050 Hz)
 ```
 
 ### Health
 ```bash
-GET /health                 # Service status and metrics
-GET /                       # API info
-```
-
----
-
-## Testing
-
-### Run Tests
-```bash
-pytest tests/ -v
-```
-
-### Test Coverage
-```bash
-pytest tests/ --cov=. --cov-report=html
-```
-
----
-
-## Troubleshooting
-
-**Port already in use:**
-```bash
-docker-compose down
-# Or change port in docker-compose.yml: "8080:8000"
-```
-
-curl -X POST http://localhost:8000/reload
-```
-
-**Health check fails:**
-```bash
-curl http://localhost:8000/health
+GET /health                 # Service status
 ```
 
 ---
@@ -306,23 +254,21 @@ curl http://localhost:8000/health
 ### Latency Optimizations
 
 - **Streaming responses**: Progressive output reduces time-to-first-token
-- **Model caching**: LRU cache for vector searches (100 queries)
 - **Async I/O**: Non-blocking operations throughout
-- **Rate limiting**: Semaphores prevent resource saturation
 - **Optimized models**: faster-whisper (4x faster), int8 quantization
+- **Local TTS/STT**: No API latency for voice processing
 
 ### Scalability
 
-**Horizontal scaling:**
+**Horizontal scaling with Docker:**
 ```bash
-docker-compose up --scale rag-api=5
+docker-compose up --scale rag-api=3
 ```
 
 **Production considerations:**
-- Add nginx load balancer
-- Use managed Redis (AWS ElastiCache)
+- Add nginx/Caddy load balancer
 - Configure auto-scaling policies
-- Monitor with Prometheus/Grafana
+- Monitor resource usage
 
 ---
 
@@ -332,37 +278,97 @@ docker-compose up --scale rag-api=5
 
 - Context-only responses enforced via system prompts
 - Out-of-scope query detection and redirection
-- Document source tracking in metadata
 - Explicit handling of missing information
 
 ### Input Validation
 
-- Audio file size limits (10MB)
-- Question length constraints
+- Audio file size limits (10MB default)
+- Question length constraints (1000 chars)
 - Empty input detection
-- Session validationbash
+- Session validation
+
+---
+
+**Port already in use:**
+```bash
+# Stop Docker containers
+docker-compose down
+
+# Or change port in docker-compose.yml: "8080:8000"
+```
+
+**Dependencies issue:**
+```bash
+# With UV
+uv sync --refresh
+
+# Traditional
 pip install -r requirements.txt --force-reinstall
 ```
 
-**Redis connection error:**
-```env
-# In .env file
-SESSION_BACKEND=memory
+**Health check fails:**
+```bash
+curl http://localhost:8000/health
 ```
 
 **Voice not working:**
 ```bash
-./setup_piper.sh
-# Then download voice models (see Voice Features)
+# Ensure piper is executable
+chmod +x piper/piper/piper
+
+# Re-run setup
+bash run.sh setup
 ```
 
 **No documents loaded:**
 ```bash
 ls data/documents/
-curl -X POST http://localhost:8000/reload
+# Add PDFs to data/documents/ then restart
 ```
 
 ---
+
+## Performance
+
+### Latency Optimizations
+
+- **Streaming responses**: Progressive output reduces time-to-first-token
+- **Async I/O**: Non-blocking operations throughout
+- **Optimized models**: faster-whisper (4x faster), int8 quantization
+- **Local TTS/STT**: No API latency for voice processing
+
+### Scalability
+
+**Horizontal scaling with Docker:**
+```bash
+docker-compose up --scale rag-api=3
+```
+
+**Production considerations:**
+- Add nginx/Caddy load balancer
+- Configure auto-scaling policies
+- Monitor resource usage
+
+---
+
+## Accuracy & Safety
+
+### Hallucination Prevention
+
+- Context-only responses enforced via system prompts
+- Out-of-scope query detection and redirection
+- Explicit handling of missing information
+
+### Input Validation
+
+- Audio file size limits (10MB default)
+- Question length constraints (1000 chars)
+- Empty input detection
+- Session validation
+
+---
+
+## Troubleshooting
 
 ## License
 

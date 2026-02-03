@@ -11,10 +11,13 @@ RUN apt-get update && apt-get install -y \
     espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY pyproject.toml .
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install UV using pip (most reliable in Docker)
+RUN pip install --no-cache-dir uv
+
+# Install dependencies with UV
+RUN uv pip install --system --no-cache .
 
 RUN mkdir -p /app/piper && \
     ARCH=$(uname -m) && \
@@ -38,9 +41,9 @@ ENV ESPEAK_DATA_PATH=/app/piper/espeak-ng-data
 
 RUN /app/piper/piper/piper --version
 
-COPY app/ app/
+COPY *.py ./
 COPY data/ data/
-COPY requirements.txt pytest.ini .env* ./
+COPY .env* ./
 
 RUN mkdir -p data/documents voices storage/chroma_db && \
     useradd -m -u 1000 appuser && \
@@ -59,4 +62,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
