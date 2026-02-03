@@ -4,9 +4,12 @@ from typing import List
 from pypdf import PdfReader
 from chromadb import Client
 from chromadb.config import Settings
+import chromadb
 
 from config import PDF_DIR, CHROMA_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 from query import get_embeddings
+
+chromadb.api.client.SharedSystemClient.clear_system_cache()
 
 def chunk_text(text: str) -> List[str]:
     chunks = []
@@ -21,8 +24,16 @@ def load_pdfs():
     os.makedirs(PDF_DIR, exist_ok=True)
     os.makedirs(CHROMA_DIR, exist_ok=True)
     
-    chroma_client = Client(Settings(persist_directory=CHROMA_DIR, anonymized_telemetry=False))
+    chroma_client = Client(Settings(
+        persist_directory=CHROMA_DIR,
+        anonymized_telemetry=False,
+        allow_reset=True
+    ))
     collection = chroma_client.get_or_create_collection("documents")
+    
+    existing_count = collection.count()
+    if existing_count > 0:
+        return collection
     
     pdf_files = [f for f in os.listdir(PDF_DIR) if f.endswith('.pdf')]
     if not pdf_files:

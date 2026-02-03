@@ -8,7 +8,8 @@ whisper_model = None
 
 def init_whisper():
     global whisper_model
-    whisper_model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+    if whisper_model is None:
+        whisper_model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
 
 def transcribe(audio_bytes: bytes) -> str:
     segments, _ = whisper_model.transcribe(audio_bytes, beam_size=5)

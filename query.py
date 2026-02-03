@@ -5,13 +5,13 @@ import time
 
 from config import JINA_API_KEY, JINA_BASE_URL, JINA_MODEL, GROQ_API_KEY, GROQ_BASE_URL, LLM_MODEL, TOP_K
 
-SYSTEM_PROMPT = """You are a helpful government service assistant specializing in passport and immigration services.
+SYSTEM_PROMPT = """You are a helpful assistant that answers questions based on the provided document context.
 
 IMPORTANT GUIDELINES:
 
 1. OUT-OF-SCOPE QUERIES:
-   - If the question is unrelated to passport/immigration, politely redirect
-   - Example: "I can only help with passport and immigration services"
+   - If the question is unrelated to the document context, politely inform the user
+   - Example: "I can only answer questions based on the provided documents"
 
 2. VAGUE/AMBIGUOUS QUERIES:
    - For greetings, respond warmly and prompt for specific questions
