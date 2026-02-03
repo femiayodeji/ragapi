@@ -13,10 +13,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY pyproject.toml .
 
-# Install UV using pip (most reliable in Docker)
 RUN pip install --no-cache-dir uv
-
-# Install dependencies with UV
 RUN uv pip install --system --no-cache .
 
 RUN mkdir -p /app/piper && \

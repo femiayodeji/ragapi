@@ -54,7 +54,6 @@ def stream_response(question: str, context: str, history: List[dict]):
         if chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             
-            # Filter out thinking tags and their content
             if "<think>" in content:
                 in_thinking = True
                 content = content.split("<think>")[0]
@@ -75,5 +74,4 @@ def generate_response(question: str, context: str) -> str:
         ],
     )
     content = response.choices[0].message.content
-    # Remove thinking tags from non-streaming response
     return re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()

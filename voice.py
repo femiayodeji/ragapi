@@ -30,8 +30,6 @@ def text_to_speech(text: str) -> bytes:
     if not result.stdout:
         raise RuntimeError("Piper TTS produced no audio output")
     
-    # Convert raw PCM to WAV format
-    # Piper outputs 16-bit PCM at 22050 Hz mono by default
     pcm_data = result.stdout
     sample_rate = 22050
     num_channels = 1
@@ -40,14 +38,13 @@ def text_to_speech(text: str) -> bytes:
     block_align = num_channels * bits_per_sample // 8
     data_size = len(pcm_data)
     
-    # Create WAV header
     wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
         b'RIFF',
-        data_size + 36,  # File size - 8
+        data_size + 36,
         b'WAVE',
         b'fmt ',
-        16,  # fmt chunk size
-        1,   # PCM format
+        16,
+        1,
         num_channels,
         sample_rate,
         byte_rate,
