@@ -6,9 +6,9 @@ Intelligent interface for citizens to engage with government services via voice 
 
 ## Key Features
 
-- **1000 concurrent users** via async FastAPI + GPU worker pools
-- **Zero-egress** architecture (all models self-hosted)
-- **Sub-2s latency** for voice-to-text responses (production setup)
+- **1000 concurrent users** via async FastAPI
+- **Simple voice pipeline** with cloud STT/TTS
+- **Fast startup** (no local model downloads)
 - **RAG accuracy** with hallucination mitigation
 
 ---
@@ -21,12 +21,10 @@ ragapi/
 ├── config.py                     # Configuration
 ├── query.py                      # RAG query processing
 ├── documents.py                  # Document loading & vector DB
-├── voice.py                      # STT & TTS (Whisper, Piper)
+├── voice.py                      # STT & TTS (SpeechRecognition, gTTS)
 ├── pyproject.toml                # Dependencies (modern standard)
 ├── data/documents/               # PDF files
 ├── storage/chroma_db/            # Vector database
-├── voices/                       # TTS voice models
-├── piper/                        # Piper TTS binaries
 ├── Dockerfile                    # Container config
 └── docker-compose.yml            # Multi-service orchestration
 ```
@@ -57,7 +55,7 @@ ragapi/
      │              │              │
      │         ┌────▼─────┐        │
      │         │   STT    │        │
-     │         │ (Whisper)│        │
+     │         │ (Google) │        │
      │         └────┬─────┘        │
      │              │              │
      └──────────────┴──────────────┘
@@ -89,13 +87,13 @@ ragapi/
                    │
             ┌──────▼──────┐
             │     TTS     │
-            │   (Piper)   │
+            │   (gTTS)    │
             └─────────────┘
 ```
 
 ### Design Decisions
 
-**STT/TTS**: Embedded models (faster-whisper, Piper) for low latency and offline capability
+**STT/TTS**: Cloud-based STT (SpeechRecognition/Google) and TTS (gTTS) for simplicity and faster startup
 
 **LLM**: API-based with multi-provider support (Groq, OpenAI, Gemini) for scalability
 
@@ -148,9 +146,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install dependencies
 uv sync
 
-# Download Piper TTS (run once)
-bash run.sh setup
-
 # Run the server
 uv run uvicorn main:app --reload
 ```
@@ -185,8 +180,6 @@ GROQ_API_KEY=your_groq_key
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 LLM_MODEL=llama-3.3-70b-versatile
 
-# Whisper STT
-WHISPER_MODEL=base
 ```
 
 ### API Providers
@@ -194,8 +187,8 @@ WHISPER_MODEL=base
 **Current Setup:**
 - **LLM:** Groq (llama-3.3-70b-versatile) - Fast, free tier available
 - **Embeddings:** Jina AI (jina-embeddings-v3) - Free, high quality
-- **STT:** Faster-Whisper (local) - Fast, runs offline
-- **TTS:** Piper (local) - Natural voices, runs offline
+- **STT:** Google Web Speech (SpeechRecognition) - Simple, cloud-based
+- **TTS:** gTTS (Google Text-to-Speech) - Simple, cloud-based
 
 All providers use OpenAI-compatible APIs for easy swapping.
 
@@ -203,21 +196,16 @@ All providers use OpenAI-compatible APIs for easy swapping.
 
 ## Voice Features
 
-**Docker:** Piper TTS is automatically installed and voice models downloaded during build.
-
-**Local:** Download Piper and voice models:
-```bash
-bash run.sh setup
-```
+**Docker/Local:** Uses cloud-based STT (Google Web Speech via SpeechRecognition) and TTS (gTTS). No local model downloads required.
 
 ### Usage
 
 ```bash
-# Text to Speech (WAV output)
+# Text to Speech (MP3 output)
 curl -X POST http://localhost:8000/text-to-speech \
   -H "Content-Type: application/json" \
   -d '{"question": "What documents can I upload?"}' \
-  --output speech.wav
+  --output speech.mp3
 
 # Voice Query (Audio input → Streaming text answer)
 curl -X POST http://localhost:8000/voice-query \
@@ -239,7 +227,7 @@ POST /query
 ### Voice
 ```bash
 POST /voice-query           # Audio file → Transcription → Streaming answer
-POST /text-to-speech        # Text → WAV audio (16-bit PCM, 22050 Hz)
+POST /text-to-speech        # Text → MP3 audio (audio/mpeg)
 ```
 
 ### Health
@@ -255,87 +243,7 @@ GET /health                 # Service status
 
 - **Streaming responses**: Progressive output reduces time-to-first-token
 - **Async I/O**: Non-blocking operations throughout
-- **Optimized models**: faster-whisper (4x faster), int8 quantization
-- **Local TTS/STT**: No API latency for voice processing
-
-### Scalability
-
-**Horizontal scaling with Docker:**
-```bash
-docker-compose up --scale rag-api=3
-```
-
-**Production considerations:**
-- Add nginx/Caddy load balancer
-- Configure auto-scaling policies
-- Monitor resource usage
-
----
-
-## Accuracy & Safety
-
-### Hallucination Prevention
-
-- Context-only responses enforced via system prompts
-- Out-of-scope query detection and redirection
-- Explicit handling of missing information
-
-### Input Validation
-
-- Audio file size limits (10MB default)
-- Question length constraints (1000 chars)
-- Empty input detection
-- Session validation
-
----
-
-**Port already in use:**
-```bash
-# Stop Docker containers
-docker-compose down
-
-# Or change port in docker-compose.yml: "8080:8000"
-```
-
-**Dependencies issue:**
-```bash
-# With UV
-uv sync --refresh
-
-# Traditional
-pip install -r requirements.txt --force-reinstall
-```
-
-**Health check fails:**
-```bash
-curl http://localhost:8000/health
-```
-
-**Voice not working:**
-```bash
-# Ensure piper is executable
-chmod +x piper/piper/piper
-
-# Re-run setup
-bash run.sh setup
-```
-
-**No documents loaded:**
-```bash
-ls data/documents/
-# Add PDFs to data/documents/ then restart
-```
-
----
-
-## Performance
-
-### Latency Optimizations
-
-- **Streaming responses**: Progressive output reduces time-to-first-token
-- **Async I/O**: Non-blocking operations throughout
-- **Optimized models**: faster-whisper (4x faster), int8 quantization
-- **Local TTS/STT**: No API latency for voice processing
+- **Cloud STT/TTS**: Scales well but depends on network latency
 
 ### Scalability
 
@@ -369,6 +277,44 @@ docker-compose up --scale rag-api=3
 ---
 
 ## Troubleshooting
+
+**Port already in use:**
+```bash
+# Stop Docker containers
+docker-compose down
+
+# Or change port in docker-compose.yml: "8080:8000"
+```
+
+**Dependencies issue:**
+```bash
+# With UV
+uv sync --refresh
+
+# Traditional
+pip install -r requirements.txt --force-reinstall
+```
+
+**Health check fails:**
+```bash
+curl http://localhost:8000/health
+```
+
+**Voice not working:**
+```bash
+# Verify outbound network access for Google STT/TTS
+curl -I https://translate.google.com
+
+# Ensure audio is a supported format (WAV recommended)
+```
+
+**No documents loaded:**
+```bash
+ls data/documents/
+# Add PDFs to data/documents/ then restart
+```
+
+---
 
 ## License
 

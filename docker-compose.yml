@@ -24,7 +24,6 @@ services:
     volumes:
       - documents_data:/app/data/documents
       - chroma_data:/app/storage/chroma_db
-      - voices_data:/app/voices
     env_file:
       - .env
     environment:
@@ -54,6 +53,4 @@ volumes:
   documents_data:
     driver: local
   chroma_data:
-    driver: local
-  voices_data:
     driver: local

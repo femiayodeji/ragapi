@@ -10,8 +10,8 @@ import asyncio
 from functools import partial
 
 from documents import load_pdfs
-from query import search, stream_response, generate_response
-from voice import init_whisper, transcribe, text_to_speech
+from query import search, stream_response
+from voice import transcribe, text_to_speech
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -69,7 +69,6 @@ async def query(q: Query):
 @app.post("/voice-query")
 async def voice_query(audio: UploadFile = File(...), session_id: Optional[str] = None):
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, init_whisper)
     audio_bytes = await audio.read()
     question = await loop.run_in_executor(None, transcribe, audio_bytes)
     
@@ -81,7 +80,7 @@ async def tts(q: Query):
     loop = asyncio.get_event_loop()
     audio = await loop.run_in_executor(None, text_to_speech, q.question)
     
-    return Response(content=audio, media_type="audio/wav")
+    return Response(content=audio, media_type="audio/mpeg")
 
 @app.get("/health")
 async def health():

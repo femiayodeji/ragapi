@@ -1,9 +1,10 @@
 from typing import List
+import os
 from openai import OpenAI
 import re
 import time
 
-from config import JINA_API_KEY, JINA_BASE_URL, JINA_MODEL, GROQ_API_KEY, GROQ_BASE_URL, LLM_MODEL, TOP_K
+from config import JINA_API_KEY, JINA_BASE_URL, JINA_MODEL, GROQ_API_KEY, GROQ_BASE_URL, LLM_MODEL, TOP_K, PDF_DIR
 
 SYSTEM_PROMPT = """You are a helpful assistant that answers questions based on the provided document context.
 
@@ -19,7 +20,7 @@ IMPORTANT GUIDELINES:
 
 3. ANSWERING QUESTIONS:
    - Base answers ONLY on the provided context
-   - Keep responses concise (2-3 paragraphs max)
+   - Keep responses concise (mostly 1 paragraph, and 2-3 paragraphs max if the context is very relevant)
    - Use bullet points for lists or steps
    - If context doesn't contain the answer, say so clearly
 
@@ -42,6 +43,22 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
                     continue
             raise
 
+def get_document_names() -> List[str]:
+    try:
+        return sorted([f for f in os.listdir(PDF_DIR) if f.endswith('.pdf')])
+    except FileNotFoundError:
+        return []
+
+def format_document_scope() -> str:
+    doc_names = get_document_names()
+    if not doc_names:
+        return "- None"
+    return "\n".join([f"- {name}" for name in doc_names])
+
+def build_system_prompt() -> str:
+    scope = format_document_scope()
+    return f"{SYSTEM_PROMPT}\n\nDocument scope:\n{scope}"
+
 def search(collection, query: str) -> str:
     query_embedding = get_embeddings([query])[0]
     results = collection.query(query_embeddings=[query_embedding], n_results=TOP_K)
@@ -50,11 +67,12 @@ def search(collection, query: str) -> str:
 def stream_response(question: str, context: str, history: List[dict]):
     history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history[-10:]])
     prompt = f"Context:\n{context}\n\nHistory:\n{history_text}\n\nQuestion: {question}"
+    system_prompt = build_system_prompt()
     
     response = llm_client.chat.completions.create(
         model=LLM_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
         stream=True
@@ -75,14 +93,3 @@ def stream_response(question: str, context: str, history: List[dict]):
             
             if not in_thinking and content:
                 yield content
-
-def generate_response(question: str, context: str) -> str:
-    response = llm_client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
-        ],
-    )
-    content = response.choices[0].message.content
-    return re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()

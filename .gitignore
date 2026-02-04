@@ -76,8 +76,6 @@ chroma_db/
 processed_files.txt
 
 # Project specific - Downloaded/Generated binaries
-piper/
-voices/
 *.tar.gz
 *.zip
 sqlite-autoconf*/
