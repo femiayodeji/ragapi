@@ -20,7 +20,7 @@ IMPORTANT GUIDELINES:
 
 3. ANSWERING QUESTIONS:
    - Base answers ONLY on the provided context
-   - Keep responses concise (mostly 1 paragraph, and 2-3 paragraphs max if the context is very relevant)
+   - Keep responses concise (mostly 1 paragraph, and 2 paragraphs max if the context is very relevant) but always keep response short and to the point
    - Use bullet points for lists or steps
    - If context doesn't contain the answer, say so clearly
 
