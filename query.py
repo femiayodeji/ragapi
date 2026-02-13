@@ -6,7 +6,41 @@ import time
 
 from config import JINA_API_KEY, JINA_BASE_URL, JINA_MODEL, GROQ_API_KEY, GROQ_BASE_URL, LLM_MODEL, TOP_K, PDF_DIR
 
-SYSTEM_PROMPT = """You are a helpful assistant that answers questions based on the provided document context.
+jina_client = OpenAI(base_url=JINA_BASE_URL, api_key=JINA_API_KEY)
+llm_client = OpenAI(base_url=GROQ_BASE_URL, api_key=GROQ_API_KEY)
+
+def get_embeddings(texts: List[str]) -> List[List[float]]:
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = jina_client.embeddings.create(input=texts, model=JINA_MODEL)
+            return [e.embedding for e in response.data]
+        except Exception as e:
+            if "RateLimitError" in str(type(e)) or "429" in str(e):
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) * 2
+                    time.sleep(wait_time)
+                    continue
+            raise
+
+def clean_document_name(filename: str) -> str:
+    name = filename.replace('.pdf', '')
+    name = re.sub(r'[_-]', ' ', name)
+    name = ' '.join(word.capitalize() for word in name.split())
+    return name
+
+def get_document_names() -> List[str]:
+    try:
+        files = sorted([f for f in os.listdir(PDF_DIR) if f.endswith('.pdf')])
+        return [clean_document_name(f) for f in files]
+    except FileNotFoundError:
+        return []
+
+def build_system_prompt() -> str:
+    doc_names = get_document_names()
+    docs_text = ", ".join(doc_names) if doc_names else "no documents"
+    
+    system_prompt = f"""You are a helpful assistant that answers questions based on the provided documents: {docs_text}.
 
 IMPORTANT GUIDELINES:
 
@@ -25,39 +59,7 @@ IMPORTANT GUIDELINES:
    - If context doesn't contain the answer, say so clearly
 
 4. TONE: Professional, clear, and helpful"""
-
-jina_client = OpenAI(base_url=JINA_BASE_URL, api_key=JINA_API_KEY)
-llm_client = OpenAI(base_url=GROQ_BASE_URL, api_key=GROQ_API_KEY)
-
-def get_embeddings(texts: List[str]) -> List[List[float]]:
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = jina_client.embeddings.create(input=texts, model=JINA_MODEL)
-            return [e.embedding for e in response.data]
-        except Exception as e:
-            if "RateLimitError" in str(type(e)) or "429" in str(e):
-                if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) * 2
-                    time.sleep(wait_time)
-                    continue
-            raise
-
-def get_document_names() -> List[str]:
-    try:
-        return sorted([f for f in os.listdir(PDF_DIR) if f.endswith('.pdf')])
-    except FileNotFoundError:
-        return []
-
-def format_document_scope() -> str:
-    doc_names = get_document_names()
-    if not doc_names:
-        return "- None"
-    return "\n".join([f"- {name}" for name in doc_names])
-
-def build_system_prompt() -> str:
-    scope = format_document_scope()
-    return f"{SYSTEM_PROMPT}\n\nDocument scope:\n{scope}"
+    return system_prompt
 
 def search(collection, query: str) -> str:
     query_embedding = get_embeddings([query])[0]
